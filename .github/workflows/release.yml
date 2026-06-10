@@ -26,8 +26,9 @@ jobs:
             popup.html \
             popup.js
           zip -r civitai-comfyui-${{ github.ref_name }}.zip icons/
+          unzip -l civitai-comfyui-${{ github.ref_name }}.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: civitai-comfyui-${{ github.ref_name }}.zip
+          files: ${{ github.workspace }}/civitai-comfyui-${{ github.ref_name }}.zip
