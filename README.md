@@ -88,7 +88,12 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.2**
+Current: **v1.2.3**
+
+### v1.2.3
+- Tags now displayed as dimmed text next to workflow names in the workflow list.
+- Export/import now includes global banned tags.
+- Fixed delete button alignment in workflow list.
 
 ### v1.2.2
 - Fixed prompt extraction failing when "Show more" is expanded — the full prompt is now correctly captured in the expanded state.
