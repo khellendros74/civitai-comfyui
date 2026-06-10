@@ -134,8 +134,28 @@
 
                 let nameSpan = document.createElement("span");
                 nameSpan.textContent = pair.name;
-                nameSpan.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e0e0ff;font-size:13px;";
+                nameSpan.style.cssText = "flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e0e0ff;font-size:13px;max-width:180px;";
                 row.appendChild(nameSpan);
+
+                if (pair.tags && pair.tags.trim())
+                {
+                    let tagsWrap = document.createElement("span");
+                    tagsWrap.style.cssText = "display:flex;flex-wrap:wrap;gap:3px;flex:1;min-width:0;overflow:hidden;";
+                    pair.tags.split(",").forEach(function (t)
+                    {
+                        let tag = t.trim();
+                        if (!tag) return;
+                        let pill = document.createElement("span");
+                        pill.textContent = tag;
+                        pill.style.cssText = "font-size:10px;color:#6b7280;background:#1e1e2e;border:1px solid #374151;border-radius:4px;padding:1px 5px;white-space:nowrap;";
+                        tagsWrap.appendChild(pill);
+                    });
+                    row.appendChild(tagsWrap);
+                }
+                else
+                {
+                    nameSpan.style.flex = "1";
+                }
 
                 if (!pair.isDefault)
                 {
@@ -561,7 +581,7 @@
 
     document.getElementById("exportBtn").addEventListener("click", function ()
     {
-        browser.storage.local.get(["pairs"]).then(function (s)
+        browser.storage.local.get(["pairs", "globalBannedTags"]).then(function (s)
         {
             let pairs = (s.pairs || []).filter(function (p) { return !p.isDefault; });
             if (pairs.length === 0)
@@ -575,7 +595,8 @@
                 String(now.getDate()).padStart(2, "0") + "_" +
                 String(now.getHours()).padStart(2, "0") +
                 String(now.getMinutes()).padStart(2, "0");
-            let json = JSON.stringify(pairs, null, 2);
+            let exportData = { globalBannedTags: s.globalBannedTags || "", pairs: pairs };
+            let json = JSON.stringify(exportData, null, 2);
             let blob = new Blob([json], { type: "application/json" });
             let url  = URL.createObjectURL(blob);
             let a    = document.createElement("a");
@@ -589,11 +610,12 @@
 
     // ── Import workflows ───────────────────────────────────────────────────────
 
-    function downloadPairsAsJson(pairs, filename)
+    function downloadPairsAsJson(pairs, globalBannedTags, filename)
     {
         let custom = pairs.filter(function (p) { return !p.isDefault; });
-        if (custom.length === 0) return; // nothing to back up
-        let blob = new Blob([JSON.stringify(custom, null, 2)], { type: "application/json" });
+        if (custom.length === 0) return;
+        let exportData = { globalBannedTags: globalBannedTags || "", pairs: custom };
+        let blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
         let url  = URL.createObjectURL(blob);
         let a    = document.createElement("a");
         a.href     = url;
@@ -619,12 +641,27 @@
             try
             {
                 let imported = JSON.parse(evt.target.result);
-                if (!Array.isArray(imported)) { statusEl.textContent = "Invalid file — expected a JSON array."; return; }
+
+                // Support both old format (plain array) and new format ({ globalBannedTags, pairs })
+                let importedGlobalBannedTags = null;
+                if (Array.isArray(imported))
+                {
+                    // old format
+                }
+                else if (imported && Array.isArray(imported.pairs))
+                {
+                    importedGlobalBannedTags = imported.globalBannedTags || "";
+                    imported = imported.pairs;
+                }
+                else
+                {
+                    statusEl.textContent = "Invalid file — expected a JSON array or export object."; return;
+                }
 
                 let valid = imported.filter(function (p) { return p.name && p.workflow; });
                 if (valid.length === 0) { statusEl.textContent = "No valid workflows found in file."; return; }
 
-                browser.storage.local.get(["pairs"]).then(function (s)
+                browser.storage.local.get(["pairs", "globalBannedTags"]).then(function (s)
                 {
                     let existing = s.pairs || [];
                     let customExisting = existing.filter(function (p) { return !p.isDefault; });
@@ -651,7 +688,7 @@
                         String(now.getDate()).padStart(2, "0") + "_" +
                         String(now.getHours()).padStart(2, "0") +
                         String(now.getMinutes()).padStart(2, "0");
-                    downloadPairsAsJson(existing, "civitai-comfyui-backup-" + stamp + ".json");
+                    downloadPairsAsJson(existing, s.globalBannedTags || "", "civitai-comfyui-backup-" + stamp + ".json");
 
                     // Replace: overwrite matching names, keep non-matching existing ones
                     let merged = customExisting.filter(function (p)
@@ -666,12 +703,19 @@
                     if (defaultEntry) merged.unshift(defaultEntry);
 
                     // Save immediately — no manual save needed
-                    browser.storage.local.set({ pairs: merged }).then(function ()
+                    let saveData = { pairs: merged };
+                    if (importedGlobalBannedTags !== null)
+                    {
+                        saveData.globalBannedTags = importedGlobalBannedTags;
+                        globalBannedTagsInput.value = importedGlobalBannedTags;
+                    }
+                    browser.storage.local.set(saveData).then(function ()
                     {
                         let detail = added > 0 && replaced > 0
                             ? added + " added, " + replaced + " replaced"
                             : added > 0 ? added + " added" : replaced + " replaced";
-                        statusEl.textContent = "✅ Import done (" + detail + "). Backup downloaded.";
+                        let extra = importedGlobalBannedTags !== null ? " Global banned tags restored." : "";
+                        statusEl.textContent = "✅ Import done (" + detail + "). Backup downloaded." + extra;
                         renderPairList(getPairMode());
                     });
                 });
