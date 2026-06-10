@@ -92,6 +92,8 @@ Current: **v1.2.2**
 
 ### v1.2.2
 - Fixed prompt extraction failing when "Show more" is expanded — the full prompt is now correctly captured in the expanded state.
+- Export/import now includes global banned tags.
+- Fixed GitHub Actions release workflow.
 
 ### v1.2.1
 - Previous release.

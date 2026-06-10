@@ -134,28 +134,8 @@
 
                 let nameSpan = document.createElement("span");
                 nameSpan.textContent = pair.name;
-                nameSpan.style.cssText = "flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e0e0ff;font-size:13px;max-width:180px;";
+                nameSpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e0e0ff;font-size:13px;";
                 row.appendChild(nameSpan);
-
-                if (pair.tags && pair.tags.trim())
-                {
-                    let tagsWrap = document.createElement("span");
-                    tagsWrap.style.cssText = "display:flex;flex-wrap:wrap;gap:3px;flex:1;min-width:0;overflow:hidden;";
-                    pair.tags.split(",").forEach(function (t)
-                    {
-                        let tag = t.trim();
-                        if (!tag) return;
-                        let pill = document.createElement("span");
-                        pill.textContent = tag;
-                        pill.style.cssText = "font-size:10px;color:#6b7280;background:#1e1e2e;border:1px solid #374151;border-radius:4px;padding:1px 5px;white-space:nowrap;";
-                        tagsWrap.appendChild(pill);
-                    });
-                    row.appendChild(tagsWrap);
-                }
-                else
-                {
-                    nameSpan.style.flex = "1";
-                }
 
                 if (!pair.isDefault)
                 {
