@@ -125,16 +125,32 @@
 
         if (!promptSection) return null;
 
+        // When collapsed: data-line-clamp="true" is present on the text container.
+        // When "Show more" is clicked: CivitAI removes that attribute and renders the
+        // full text in a plain div — so we fall back to the prompt section's text content.
         let textEl = promptSection.querySelector("[data-line-clamp='true']");
         if (!textEl) textEl = panel.querySelector("[data-line-clamp='true']");
-        if (!textEl) return null;
 
-        let clone = textEl.cloneNode(true);
-        let uiSpans = clone.querySelectorAll("span.absolute, span.select-none");
-        for (let s of uiSpans) { s.remove(); }
+        if (textEl)
+        {
+            let clone = textEl.cloneNode(true);
+            let uiSpans = clone.querySelectorAll("span.absolute, span.select-none");
+            for (let s of uiSpans) { s.remove(); }
+            let text = clone.textContent.trim();
+            if (text.length > 0) return text;
+        }
 
-        let text = clone.textContent.trim();
-        return text.length > 0 ? text : null;
+        // Expanded state fallback: grab all text inside the prompt section,
+        // excluding the "Prompt" header itself and any "Show less" button text.
+        let fallbackClone = promptSection.cloneNode(true);
+        // Remove header row (contains the "Prompt" label + copy buttons)
+        let headerRow = fallbackClone.querySelector("div.flex.items-center");
+        if (headerRow) headerRow.remove();
+        // Remove "Show less" / "Show more" toggle buttons
+        let toggleBtns = fallbackClone.querySelectorAll("button");
+        for (let b of toggleBtns) { b.remove(); }
+        let fallbackText = fallbackClone.textContent.trim();
+        return fallbackText.length > 0 ? fallbackText : null;
     }
 
     // ── Tag extraction (individual image pages) ──────────────────────────────
