@@ -1,0 +1,31 @@
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build zip
+        run: |
+          cd ${{ github.workspace }}
+          zip civitai-comfyui-${{ github.ref_name }}.zip \
+            manifest.json \
+            background.js \
+            content.js \
+            options.html \
+            options.js \
+            popup.html \
+            popup.js
+          zip -r civitai-comfyui-${{ github.ref_name }}.zip icons/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: civitai-comfyui-${{ github.ref_name }}.zip
