@@ -141,7 +141,7 @@
                 {
                     let delBtn = document.createElement("button");
                     delBtn.textContent = "✕";
-                    delBtn.style.cssText = "background:transparent;border:none;color:#374151;font-size:12px;padding:2px 6px;cursor:pointer;flex-shrink:0;border-radius:4px;line-height:1;";
+                    delBtn.style.cssText = "background:transparent;border:none;color:#374151;font-size:12px;padding:2px 6px;cursor:pointer;flex-shrink:0;border-radius:4px;line-height:1;margin-left:auto;";
                     delBtn.addEventListener("mouseenter", function () { delBtn.style.color = "#f87171"; });
                     delBtn.addEventListener("mouseleave", function () { delBtn.style.color = "#374151"; });
                     delBtn.addEventListener("click", (function (p)
