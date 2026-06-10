@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CivitAI → ComfyUI — Settings</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body
+        {
+            background: #0f0f1a;
+            color: #e0e0ff;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+            padding: 40px 24px;
+        }
+
+        .container { max-width: 680px; margin: 0 auto; }
+
+        header
+        {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 8px;
+        }
+
+        header h1 { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+
+        .logo
+        {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #7c6af7, #4f46e5);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        h1 { font-size: 22px; font-weight: 700; color: #c7d2fe; }
+        h1 span { color: #7c6af7; }
+
+        .card
+        {
+            background: #1a1a2e;
+            border: 1px solid #2d2b55;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card h2
+        {
+            font-size: 14px;
+            font-weight: 600;
+            color: #a5b4fc;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 16px;
+        }
+
+        label
+        {
+            display: block;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        input[type="text"],
+        textarea
+        {
+            width: 100%;
+            background: #0f0f1a;
+            border: 1px solid #2d2b55;
+            border-radius: 8px;
+            color: #e0e0ff;
+            font-size: 13px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            padding: 10px 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            resize: vertical;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus { border-color: #7c6af7; }
+
+        textarea { min-height: 260px; }
+
+        textarea.short { min-height: 80px; }
+
+        .hint
+        {
+            font-size: 12px;
+            color: #64748b;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        .hint code
+        {
+            background: #0f0f1a;
+            border: 1px solid #2d2b55;
+            border-radius: 4px;
+            padding: 1px 5px;
+            color: #a5b4fc;
+        }
+
+        .field + .field { margin-top: 18px; }
+
+        .actions { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+
+        button
+        {
+            padding: 10px 24px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary { background: #7c6af7; color: #fff; }
+        .btn-primary:hover { background: #6d5ce7; }
+
+        .btn-secondary
+        {
+            background: transparent;
+            border: 1px solid #2d2b55;
+            color: #94a3b8;
+        }
+        .btn-secondary:hover { border-color: #7c6af7; color: #c7d2fe; }
+
+        #status { font-size: 13px; padding: 4px 0; transition: opacity 0.4s; }
+        #status.ok  { color: #6ee7b7; }
+        #status.err { color: #f87171; }
+        #status.hidden { opacity: 0; }
+
+        .radio-group { display: flex; flex-direction: column; gap: 10px; }
+
+        .radio-label
+        {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #cbd5e1;
+        }
+
+        .radio-label input[type="radio"]
+        {
+            margin-top: 2px;
+            accent-color: #7c6af7;
+            flex-shrink: 0;
+        }
+
+        .radio-label strong { color: #e0e0ff; }
+
+        .model-checkbox-list
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #0f0f1a;
+            border: 1px solid #2d2b55;
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+
+        .model-checkbox-list label
+        {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #94a3b8;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .model-checkbox-list input[type="checkbox"]
+        {
+            accent-color: #7c6af7;
+            flex-shrink: 0;
+        }
+
+        .model-radio-list
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #0f0f1a;
+            border: 1px solid #2d2b55;
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+
+        .model-radio-list label
+        {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #94a3b8;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .model-radio-list input[type="radio"]
+        {
+            accent-color: #7c6af7;
+            flex-shrink: 0;
+        }
+    
+        .pair-list
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .pair-item
+        {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #0f0f1a;
+            border: 1px solid #2d2b55;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .pair-item input[type="radio"],
+        .pair-item input[type="checkbox"]
+        {
+            accent-color: #7c6af7;
+            flex-shrink: 0;
+        }
+
+        .pair-item .pair-name
+        {
+            flex: 1;
+            color: #e0e0ff;
+            font-weight: 500;
+        }
+
+        .pair-delete
+        {
+            background: transparent;
+            border: none;
+            border-radius: 4px;
+            color: #374151;
+            font-size: 11px;
+            padding: 2px 6px;
+            cursor: pointer;
+            transition: color 0.2s;
+            flex-shrink: 0;
+        }
+
+        .pair-delete:hover { color: #f87171; }
+
+        .pair-save-row
+        {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            align-items: center;
+        }
+
+        .pair-save-row input[type="text"]
+        {
+            flex: 1;
+            min-width: 0;
+        }
+
+        #pairModeArea { margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+    <header>
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAY1BMVEVMaXEXLdcXLNgXLdcXLNgWLdcWLNcWLdcXLdgTMNjw/0Hu/UkfMtf2/yUAAdoQKdcYMOUnONYAAN0XLt3S4Hr4/w4vP9UAGtng72TBz4rz/zZEUdKir6e0wphyfsGPm7NaZ8k8Nl+9AAAACnRSTlMAyJb/LLZe+eQFPzCELgAAAAlwSFlzAAAsSwAALEsBpT2WqQAAAsZJREFUeNqll4F2qjAMhlFEnQ0tqUARQX3/p7wp6l1aAuj4z3bOjiOfSROSNEm8fuh3t99mm+MH2mTb/e5l9BL9ud+kBen8gfxz6WbPCD/JLqPPDqT0Aw3PFUW2exPI/lh8ZsspxfFFIPtD8aX5gCgOA+H5/Wn6F8LLh+xv9p6Q+RD2f7X3BMpFslkD2FD9LDyEsSD4924+AoO105EQTBDDdgZg0Fh3DVVrBwywnc0BateVTaTeGeB5mDlDcHVZ5bGqztb8FI/nGQculRopLzX8d+F8nAaY2t7a01j5RWPKAJMBEKDPJQCFwPIwDQDQpQQ4PULAhDFArR9KCMEfAX9UABhA45xDexccUFXPHZAAvno0Yo3mkivBg5vFWYBB964eKQdtU7t0LgSyh1f1SPaqulicBfDqEexz9QjPMAY8q4eZRmXc3HTowMiD2nbB0ZUXrg5i+xgAKVWP4km32jK5IAMCAH31qN8j6+wVayaI7UeAsHraKOlmXHZJXP99pVjSjVlqrBHAYZOrybL9AKB5C1D53eJ3ALQdj0Bdo6r5wIOSR1Au24cA0FfWAnwS8SuA8UlUPIn6S0BtL79HoPIG2QxJzTIAjGnasPcgvBUPRQHg38SweQUz0TpYBnRhFyy5ehQJyVwf562gJYcA5gHoq4C3IjbQTsp3Q1gK4V5VOf1I44SSsgTwhXT3fac8ye10KQRPsMOBl8JAGN6sxXeBNiJ4HsXIvqV+LAIOo8GmH+IRlNoIgPF09tVQKXkmSpveaMGgN0qcidQehe4kbCi0GAlDkaqA2l0qAeIlywNOo8Wore6SA37JGq15aHtfTaHaTkyBX/NGiyY46MpI/c2CvCxvhVUXnNWOaXiXEabWdWHZphUnFH0y1dF28roPkebW/fUXjrVXnvWXrrXXvvUXz/VX3/DyvWQuXb6D6/+sF/Td8fX/H6zEdFpdV1ECAAAAAElFTkSuQmCC" width="40" height="40" style="border-radius:10px;" alt="ComfyUI">
+        <h1>
+            <div style="white-space:nowrap;">
+                <a href="https://addons.mozilla.org/en-US/firefox/addon/civitai-comfyui/" target="_blank" style="color:inherit;text-decoration:none;" title="View on Mozilla Add-ons">CivitAI <span>→</span> ComfyUI</a>
+                <sup style="font-size:11px;color:#64748b;font-weight:400;letter-spacing:0;">v1.2.0</sup>
+            </div>
+            <p id="serverStatusBanner" style="display:none;font-size:12px;color:#64748b;margin:4px 0 0 0;"></p>
+        </h1>
+        <div style="margin-left:auto;display:flex;flex-direction:column;gap:8px;">
+            <button class="btn-secondary" id="importBtn" style="font-size:12px;padding:7px 14px;white-space:nowrap;">⬇ Import workflows</button>
+            <button class="btn-secondary" id="exportBtn" style="font-size:12px;padding:7px 14px;white-space:nowrap;">⬆ Export workflows</button>
+        </div>
+    </header>
+
+
+    <div class="card">
+        <h2>Server</h2>
+        <label for="comfyUrl">ComfyUI URL</label>
+        <input type="text" id="comfyUrl" placeholder="http://localhost:8188" spellcheck="false">
+        <p class="hint">Include protocol and port. No trailing slash.</p>
+        <label for="globalBannedTags" style="margin-top:10px;display:block;">Global banned tags</label>
+        <input type="text" id="globalBannedTags" placeholder="e.g. nsfw, explicit*" spellcheck="false">
+        <p class="hint">Applied to every workflow. Same syntax as per-workflow banned tags.</p>
+    </div>
+
+    <div class="card">
+        <h2>Seed</h2>
+        <div class="radio-group">
+            <label class="radio-label">
+                <input type="radio" name="seedMode" value="workflow" checked>
+                <span><strong>Default</strong> — use the seed value defined in your workflow</span>
+            </label>
+            <label class="radio-label">
+                <input type="radio" name="seedMode" value="random">
+                <span><strong>Random</strong> — generate a new random seed on each run</span>
+            </label>
+            <label class="radio-label">
+                <input type="radio" name="seedMode" value="static">
+                <span><strong>Static</strong> — one random seed generated per click, shared across all workflows</span>
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Model</h2>
+        <div class="field">
+            <label>Checkpoint selection mode</label>
+            <div class="radio-group">
+                <label class="radio-label">
+                    <input type="radio" name="modelMode" value="default" checked>
+                    <span><strong>Default</strong> — use the model defined in your workflow</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="modelMode" value="random">
+                    <span><strong>Random</strong> — pick a random model from a selection on each run</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="modelMode" value="static">
+                    <span><strong>Static</strong> — always use a specific model</span>
+                </label>
+            </div>
+        </div>
+        <div id="modelPickerArea" style="display:none;" class="field">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+                <label id="modelPickerLabel" style="margin:0;flex-shrink:0;">Models</label>
+                <button class="btn-secondary" id="loadModelsBtn" type="button" style="padding:6px 14px;font-size:12px;">Load from server</button>
+                <span id="modelsStatus" style="font-size:12px;color:#64748b;"></span>
+            </div>
+            <div id="modelListArea"></div>
+            <p class="hint" id="modelPickerHint"></p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Workflow</h2>
+
+        <div class="field">
+            <label>Mode</label>
+            <div class="radio-group" id="pairModeRadios">
+                <label class="radio-label">
+                    <input type="radio" name="pairMode" value="static" checked>
+                    <span><strong>Static</strong> — always use a specific saved workflow</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="pairMode" value="random">
+                    <span><strong>Random</strong> — pick a random workflow on each run</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="pairMode" value="sequential">
+                    <span><strong>Sequential</strong> — cycle through selected workflows in order, looping</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="pairMode" value="all">
+                    <span><strong>All</strong> — send all selected workflows to ComfyUI in one click</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="field">
+            <div class="pair-save-row" style="margin-bottom:6px;">
+                <input type="text" id="pairName" placeholder="Workflow name (e.g. Illustrious portrait)">
+                <button class="btn-secondary" id="savePairBtn" type="button" style="padding:6px 14px;font-size:12px;white-space:nowrap;">Save</button>
+            </div>
+            <input type="text" id="pairTags" placeholder="Tags (comma separated, e.g. anime, portrait)" style="width:100%;box-sizing:border-box;margin-bottom:6px;">
+            <label id="pairModeLabel" style="display:none;">Saved workflows</label>
+            <div class="pair-list" id="pairList"></div>
+            <p class="hint" id="pairModeHint">Name + save the suffix &amp; workflow below. Click a saved workflow to load it.</p>
+        </div>
+
+        <div class="field">
+            <label for="promptSuffix">Custom suffix</label>
+            <textarea id="promptSuffix" class="short" placeholder="e.g. masterpiece, best quality, HDR&#10;Leave empty to send the CivitAI prompt as-is."></textarea>
+        </div>
+
+        <div class="field">
+            <label for="pairBannedTags">Banned tags</label>
+            <input type="text" id="pairBannedTags" placeholder="e.g. hair, nsfw, explicit*" spellcheck="false">
+            <p class="hint">Comma-separated. Exact match (e.g. <code>hair</code>) removes only that tag. Wildcard (e.g. <code>hair*</code>) removes all tags containing that word. Only applied to the CivitAI prompt — not to Custom suffix.</p>
+        </div>
+
+        <div class="field">
+            <label for="workflow">Workflow JSON (API format)</label>
+            <textarea id="workflow" placeholder='Paste your workflow JSON here (use "Save (API Format)" in ComfyUI)...'></textarea>
+            <p class="hint">
+                In ComfyUI: enable Dev Mode → click <code>Save (API Format)</code> → paste the result here.<br>
+                The extension will inject the CivitAI prompt into every positive <code>CLIPTextEncode</code> node.
+            </p>
+        </div>
+
+    </div>
+
+    <div class="actions">
+        <button class="btn-primary" id="saveBtn">Save Settings</button>
+        <button class="btn-secondary" id="testBtn">Test Connection</button>
+        <button class="btn-secondary" id="resetBtn" style="color:#f87171;border-color:#374151;">Reset defaults</button>
+        <span id="status" class="hidden"></span>
+    </div>
+
+    <input type="file" id="importFile" accept=".json" style="display:none;">
+
+</div>
+<script src="options.js"></script>
+</body>
+</html>

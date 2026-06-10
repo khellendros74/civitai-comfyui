@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body
+        {
+            background: #0f0f1a;
+            color: #e0e0ff;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            width: 240px;
+            padding: 16px;
+        }
+
+        header
+        {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .logo
+        {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #7c6af7, #a78bfa);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        h1 { font-size: 14px; font-weight: 700; color: #c7d2fe; }
+
+        p
+        {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+            margin-bottom: 14px;
+        }
+
+        button
+        {
+            width: 100%;
+            padding: 9px;
+            border-radius: 7px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #7c6af7;
+            color: #fff;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: #6d5ce7; }
+
+        .status
+        {
+            font-size: 11px;
+            color: #64748b;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .dot
+        {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #374151;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .dot.ok   { background: #6ee7b7; }
+        .dot.err  { background: #f87171; }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAY1BMVEVMaXEXLdcXLNgXLdcXLNgWLdcWLNcWLdcXLdgTMNjw/0Hu/UkfMtf2/yUAAdoQKdcYMOUnONYAAN0XLt3S4Hr4/w4vP9UAGtng72TBz4rz/zZEUdKir6e0wphyfsGPm7NaZ8k8Nl+9AAAACnRSTlMAyJb/LLZe+eQFPzCELgAAAAlwSFlzAAAsSwAALEsBpT2WqQAAAsZJREFUeNqll4F2qjAMhlFEnQ0tqUARQX3/p7wp6l1aAuj4z3bOjiOfSROSNEm8fuh3t99mm+MH2mTb/e5l9BL9ud+kBen8gfxz6WbPCD/JLqPPDqT0Aw3PFUW2exPI/lh8ZsspxfFFIPtD8aX5gCgOA+H5/Wn6F8LLh+xv9p6Q+RD2f7X3BMpFslkD2FD9LDyEsSD4924+AoO105EQTBDDdgZg0Fh3DVVrBwywnc0BateVTaTeGeB5mDlDcHVZ5bGqztb8FI/nGQculRopLzX8d+F8nAaY2t7a01j5RWPKAJMBEKDPJQCFwPIwDQDQpQQ4PULAhDFArR9KCMEfAX9UABhA45xDexccUFXPHZAAvno0Yo3mkivBg5vFWYBB964eKQdtU7t0LgSyh1f1SPaqulicBfDqEexz9QjPMAY8q4eZRmXc3HTowMiD2nbB0ZUXrg5i+xgAKVWP4km32jK5IAMCAH31qN8j6+wVayaI7UeAsHraKOlmXHZJXP99pVjSjVlqrBHAYZOrybL9AKB5C1D53eJ3ALQdj0Bdo6r5wIOSR1Au24cA0FfWAnwS8SuA8UlUPIn6S0BtL79HoPIG2QxJzTIAjGnasPcgvBUPRQHg38SweQUz0TpYBnRhFyy5ehQJyVwf562gJYcA5gHoq4C3IjbQTsp3Q1gK4V5VOf1I44SSsgTwhXT3fac8ye10KQRPsMOBl8JAGN6sxXeBNiJ4HsXIvqV+LAIOo8GmH+IRlNoIgPF09tVQKXkmSpveaMGgN0qcidQehe4kbCi0GAlDkaqA2l0qAeIlywNOo8Wore6SA37JGq15aHtfTaHaTkyBX/NGiyY46MpI/c2CvCxvhVUXnNWOaXiXEabWdWHZphUnFH0y1dF28roPkebW/fUXjrVXnvWXrrXXvvUXz/VX3/DyvWQuXb6D6/+sF/Td8fX/H6zEdFpdV1ECAAAAAElFTkSuQmCC" width="28" height="28" style="border-radius:6px;" alt="ComfyUI">
+        <h1>CivitAI → ComfyUI</h1>
+    </header>
+    <p>Buttons are injected automatically on CivitAI image pages next to the copy icon.</p>
+    <button id="optBtn">Open Settings</button>
+    <p class="status" id="statusLine">
+        <span class="dot" id="dot"></span>
+        <span id="statusText">Checking…</span>
+    </p>
+    <script src="popup.js"></script>
+</body>
+</html>
