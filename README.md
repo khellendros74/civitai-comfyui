@@ -88,4 +88,13 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.0** — see [release notes](https://addons.mozilla.org/en-US/firefox/addon/civitai-comfyui/) on AMO.
+Current: **v1.2.2**
+
+### v1.2.2
+- Fixed prompt extraction failing when "Show more" is expanded — the full prompt is now correctly captured in the expanded state.
+
+### v1.2.1
+- Previous release.
+
+### v1.2.0
+- See [release notes](https://addons.mozilla.org/en-US/firefox/addon/civitai-comfyui/) on AMO.
