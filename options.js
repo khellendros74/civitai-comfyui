@@ -134,8 +134,20 @@
 
                 let nameSpan = document.createElement("span");
                 nameSpan.textContent = pair.name;
-                nameSpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e0e0ff;font-size:13px;";
+                nameSpan.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e0e0ff;font-size:13px;flex-shrink:0;";
                 row.appendChild(nameSpan);
+
+                if (pair.tags && pair.tags.trim())
+                {
+                    let tagsSpan = document.createElement("span");
+                    tagsSpan.textContent = pair.tags;
+                    tagsSpan.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b;font-size:11px;margin-left:6px;";
+                    row.appendChild(tagsSpan);
+                }
+                else
+                {
+                    nameSpan.style.flex = "1";
+                }
 
                 if (!pair.isDefault)
                 {
