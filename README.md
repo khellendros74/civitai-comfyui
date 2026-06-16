@@ -88,7 +88,13 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.3**
+Current: **v1.2.4**
+
+### v1.2.4
+- Fixed button not appearing on `/posts/*` URLs.
+- Fixed negative prompt being extracted instead of positive when "Show more" is expanded.
+- Fixed "Default" model label showing wrong checkpoint name.
+- Added workflow list sort controls (A→Z / Recent first).
 
 ### v1.2.3
 - Tags now displayed as dimmed text next to workflow names in the workflow list.

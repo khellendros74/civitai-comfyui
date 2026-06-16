@@ -23,6 +23,7 @@
     let savePairBtn    = document.getElementById("savePairBtn");
 
     let cachedModels = [];
+    let pairSortOrder = "alpha"; // "alpha" | "date"
 
     const DEFAULT_WORKFLOW = '{"3":{"inputs":{"seed":685468484323813,"steps":20,"cfg":8,"sampler_name":"euler","scheduler":"normal","denoise":1,"model":["4",0],"positive":["6",0],"negative":["7",0],"latent_image":["5",0]},"class_type":"KSampler","_meta":{"title":"KSampler"}},"4":{"inputs":{"ckpt_name":"v1-5-pruned-emaonly-fp16.safetensors"},"class_type":"CheckpointLoaderSimple","_meta":{"title":"Load Checkpoint"}},"5":{"inputs":{"width":512,"height":512,"batch_size":1},"class_type":"EmptyLatentImage","_meta":{"title":"Empty Latent Image"}},"6":{"inputs":{"text":"beautiful scenery nature glass bottle landscape, purple galaxy bottle,","clip":["4",1]},"class_type":"CLIPTextEncode","_meta":{"title":"CLIP Text Encode (Prompt)"}},"7":{"inputs":{"text":"text, watermark","clip":["4",1]},"class_type":"CLIPTextEncode","_meta":{"title":"CLIP Text Encode (Prompt)"}},"8":{"inputs":{"samples":["3",0],"vae":["4",2]},"class_type":"VAEDecode","_meta":{"title":"VAE Decode"}},"9":{"inputs":{"filename_prefix":"ComfyUI","images":["8",0]},"class_type":"SaveImage","_meta":{"title":"Save Image"}}}';
 
@@ -63,6 +64,8 @@
     {
         let mode = getPairMode();
         pairModeLabel.style.display = "block";
+        // Reset hint to plain text only — sort buttons are re-injected by renderPairList
+        pairModeHint.style.cssText = "";
         if (mode === "static")
         {
             pairModeLabel.textContent = "Saved workflows";
@@ -109,10 +112,61 @@
                 return;
             }
 
+            // Sort buttons injected inline into the hint/label row
+            function makeSortBtn(label, value)
+            {
+                let btn = document.createElement("button");
+                btn.textContent = label;
+                btn.style.cssText = "padding:2px 10px;font-size:11px;border-radius:4px;border:1px solid #2d2b55;cursor:pointer;transition:background 0.15s,color 0.15s;";
+                if (pairSortOrder === value)
+                {
+                    btn.style.background = "#7c6af7";
+                    btn.style.color = "#fff";
+                }
+                else
+                {
+                    btn.style.background = "transparent";
+                    btn.style.color = "#94a3b8";
+                }
+                btn.addEventListener("click", function ()
+                {
+                    pairSortOrder = value;
+                    renderPairList(getPairMode());
+                });
+                return btn;
+            }
+
+            // Append sort buttons into pairModeHint, right-aligned
+            // Remove any previously injected sort buttons first
+            let existingSortGroup = pairModeHint.querySelector(".pair-sort-group");
+            if (existingSortGroup) existingSortGroup.remove();
+            pairModeHint.style.cssText = "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;";
+            let sortGroup = document.createElement("span");
+            sortGroup.className = "pair-sort-group";
+            sortGroup.style.cssText = "display:flex;gap:4px;margin-left:auto;flex-shrink:0;";
+            sortGroup.appendChild(makeSortBtn("A→Z", "alpha"));
+            sortGroup.appendChild(makeSortBtn("Recent", "date"));
+            pairModeHint.appendChild(sortGroup);
+
+            // Default always stays first; sort the rest
+            let defaultEntry = pairs.find(function (p) { return p.isDefault; });
+            let custom = pairs.filter(function (p) { return !p.isDefault; });
+
+            if (pairSortOrder === "date")
+            {
+                custom.sort(function (a, b) { return (b.savedAt || 0) - (a.savedAt || 0); });
+            }
+            else
+            {
+                custom.sort(function (a, b) { return a.name.localeCompare(b.name); });
+            }
+
+            let sorted = defaultEntry ? [defaultEntry].concat(custom) : custom;
+
             let container = document.createElement("div");
             container.className = "model-checkbox-list";
 
-            for (let pair of pairs)
+            for (let pair of sorted)
             {
                 let row = document.createElement("div");
                 row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;transition:background 0.15s;";
@@ -198,6 +252,8 @@
                         if (pairTagsInput) pairTagsInput.value = p.isDefault ? "" : (p.tags || "");
                         if (pairBannedTagsInput) pairBannedTagsInput.value = p.bannedTags || "";
                         updateDefaultLabel(p.workflow || "");
+                        // If in static mode, refresh the Static model label live
+                        if (mode === "static") updateStaticModelLabel();
                         showStatus("Loaded: " + p.name, false);
                     };
                 })(pair, input, row));
@@ -244,7 +300,7 @@
             let pairs = s.pairs || [];
             let defaultEntry = pairs.find(function (p) { return p.isDefault; });
             pairs = pairs.filter(function (p) { return p.name !== name && !p.isDefault; });
-            pairs.push({ name: name, workflow: wf, suffix: suffix, tags: tags, bannedTags: bannedTags });
+            pairs.push({ name: name, workflow: wf, suffix: suffix, tags: tags, bannedTags: bannedTags, savedAt: Date.now() });
             if (defaultEntry) pairs.unshift(defaultEntry);
             browser.storage.local.set({ pairs }).then(function ()
             {
@@ -253,6 +309,7 @@
                 if (pairTagsInput) pairTagsInput.value = "";
                 if (pairBannedTagsInput) pairBannedTagsInput.value = "";
                 renderPairList(getPairMode());
+                updateStaticModelLabel();
             });
         });
     });
@@ -279,9 +336,9 @@
         return null;
     }
 
+    // Default label: never show a checkpoint name — each workflow has its own
     function updateDefaultLabel(workflowRaw)
     {
-        let ckpt = extractCheckpointFromWorkflow(workflowRaw);
         let defaultRadio = document.querySelector("input[name='modelMode'][value='default']");
         if (!defaultRadio) return;
         let span = defaultRadio.nextElementSibling;
@@ -290,19 +347,30 @@
         let strong = document.createElement("strong");
         strong.textContent = "Default";
         span.appendChild(strong);
-        if (ckpt)
+        span.appendChild(document.createTextNode(" — use the model defined in your workflow"));
+    }
+
+    // Static label: update the dedicated span inside the Workflow > Static radio
+    function updateStaticModelLabel()
+    {
+        let el = document.getElementById("staticPairLabel");
+        if (!el) return;
+
+        browser.storage.local.get(["staticPair"]).then(function (s)
         {
-            span.appendChild(document.createTextNode(" — use "));
-            let code = document.createElement("code");
-            code.textContent = ckpt;
-            code.style.cssText = "background:#0f0f1a;border:1px solid #2d2b55;border-radius:4px;padding:1px 6px;color:#a5b4fc;font-size:11px;";
-            span.appendChild(code);
-            span.appendChild(document.createTextNode(" from your workflow"));
-        }
-        else
-        {
-            span.appendChild(document.createTextNode(" — use the model defined in your workflow"));
-        }
+            el.textContent = "";
+            if (s.staticPair)
+            {
+                let code = document.createElement("code");
+                code.textContent = s.staticPair;
+                code.style.cssText = "background:#0f0f1a;border:1px solid #2d2b55;border-radius:4px;padding:1px 6px;color:#a5b4fc;font-size:11px;font-style:normal;";
+                el.appendChild(code);
+            }
+            else
+            {
+                el.textContent = "a specific saved workflow";
+            }
+        });
     }
 
     // ── Model picker ───────────────────────────────────────────────────────────
@@ -370,6 +438,24 @@
         return container;
     }
 
+    function updateStaticModelLabelEl(modelName)
+    {
+        let el = document.getElementById("staticModelLabel");
+        if (!el) return;
+        el.textContent = "";
+        if (modelName)
+        {
+            let code = document.createElement("code");
+            code.textContent = getModelName(modelName);
+            code.style.cssText = "background:#0f0f1a;border:1px solid #2d2b55;border-radius:4px;padding:1px 6px;color:#a5b4fc;font-size:11px;font-style:normal;";
+            el.appendChild(code);
+        }
+        else
+        {
+            el.textContent = "a specific model";
+        }
+    }
+
     function renderModelList(mode)
     {
         let modelListArea = document.getElementById("modelListArea");
@@ -379,9 +465,15 @@
             let staticModel    = s.staticModel || "";
             modelListArea.textContent = "";
             if (mode === "random")
+            {
                 modelListArea.appendChild(buildGroupedList(cachedModels, "checkbox", "randomModelChoice", function (m) { return selectedModels.includes(m); }));
+            }
             else
+            {
                 modelListArea.appendChild(buildGroupedList(cachedModels, "radio", "staticModelChoice", function (m) { return m === staticModel; }));
+                // Show the saved value only, not the selected one
+                updateStaticModelLabelEl(staticModel);
+            }
         });
     }
 
@@ -458,6 +550,8 @@
         for (let rb of document.querySelectorAll("input[name='modelMode']")) { rb.checked = (rb.value === modelMode); }
         updatePickerUI();
         updateDefaultLabel(resolvedWf);
+        // Restore static model label from saved value
+        if (s.staticModel) updateStaticModelLabelEl(s.staticModel);
 
         // Ensure Default entry exists in pairs using the SAVED workflow (not textarea)
         // This is the only place we update Default — never from textarea input events
@@ -477,6 +571,7 @@
         browser.storage.local.set({ pairs: pairs }).then(function ()
         {
             updatePairModeUI();
+            updateStaticModelLabel();
         });
 
         if (modelMode !== "default" && resolvedUrl)
@@ -551,11 +646,11 @@
                     let newTags = pairTagsInput ? pairTagsInput.value.trim() : existingTags;
                     let existingBanned = pairs[idx].bannedTags || "";
                     let newBanned = pairBannedTagsInput ? pairBannedTagsInput.value.trim() : existingBanned;
-                    pairs[idx] = { name: loadedPairName, workflow: wf, suffix: suffix, tags: newTags, bannedTags: newBanned };
+                    pairs[idx] = { name: loadedPairName, workflow: wf, suffix: suffix, tags: newTags, bannedTags: newBanned, savedAt: Date.now() };
                 }
             }
 
-            browser.storage.local.set({ comfyUrl: url, globalBannedTags, promptSuffix: suffix, workflow: wf, modelMode: mode, selectedModels, staticModel, seedMode, pairMode, selectedPairs, staticPair, pairs })
+            browser.storage.local.set({ comfyUrl: url, globalBannedTags, promptSuffix: suffix, workflow: wf, modelMode: mode, selectedModels, staticModel, seedMode, pairMode, selectedPairs, staticPair, pairs, sequentialStarted: false })
             .then(function ()
             {
                 let msg = (loadedPairName && loadedPairName !== "Default")
@@ -564,6 +659,8 @@
                 showStatus(msg, false);
                 renderPairList(pairMode);
                 updateDefaultLabel(wf);
+                updateStaticModelLabel();
+                updateStaticModelLabelEl(staticModel);
             })
             .catch(function (e) { showStatus("❌ Save failed: " + e.message, true); });
         });

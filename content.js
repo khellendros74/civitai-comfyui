@@ -140,15 +140,33 @@
             if (text.length > 0) return text;
         }
 
-        // Expanded state fallback: grab all text inside the prompt section,
-        // excluding the "Prompt" header itself and any "Show less" button text.
-        let fallbackClone = promptSection.cloneNode(true);
-        // Remove header row (contains the "Prompt" label + copy buttons)
+        // Expanded state fallback: only use the FIRST flex-col child that contains
+        // the prompt text — never bleed into the negative prompt sibling section.
+        let flexCols = promptSection.querySelectorAll(":scope > div.flex.flex-col");
+        let promptCol = null;
+        for (let col of flexCols)
+        {
+            let hdr = col.querySelector("p");
+            if (hdr && hdr.textContent.trim() === "Prompt")
+            {
+                promptCol = col;
+                break;
+            }
+        }
+        // Fall back to first flex-col if header matching failed
+        if (!promptCol && flexCols.length > 0) promptCol = flexCols[0];
+        let targetCol = promptCol || promptSection;
+
+        let fallbackClone = targetCol.cloneNode(true);
+        // Remove header row (Prompt label + copy buttons)
         let headerRow = fallbackClone.querySelector("div.flex.items-center");
         if (headerRow) headerRow.remove();
-        // Remove "Show less" / "Show more" toggle buttons
+        // Remove Show less / Show more toggles
         let toggleBtns = fallbackClone.querySelectorAll("button");
         for (let b of toggleBtns) { b.remove(); }
+        // Remove inline Show less/more spans
+        let toggleSpans = fallbackClone.querySelectorAll("span[class*='cursor-pointer']");
+        for (let sp of toggleSpans) { sp.remove(); }
         let fallbackText = fallbackClone.textContent.trim();
         return fallbackText.length > 0 ? fallbackText : null;
     }
@@ -457,7 +475,7 @@
 
     async function sendToComfyUI(prompt, btn)
     {
-        let settings = await browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair", "sequentialIndex", "tagSequentialIndex", "lastSentIntent"]);
+        let settings = await browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair", "sequentialIndex", "sequentialStarted", "tagSequentialIndex", "lastSentIntent"]);
         let comfyUrl = (settings.comfyUrl || "").replace(/\/$/, "");
 
         if (!comfyUrl)
@@ -494,9 +512,20 @@
                     let pool = pairs.filter(function (p) { return settings.selectedPairs.includes(p.name); });
                     if (pool.length > 0)
                     {
-                        let idx = (settings.sequentialIndex || 0) % pool.length;
+                        // sequentialStarted flags that the random seed has been set;
+                        // on first click we pick a random position and store it
+                        let idx;
+                        if (!settings.sequentialStarted)
+                        {
+                            idx = Math.floor(Math.random() * pool.length);
+                            browser.storage.local.set({ sequentialStarted: true, sequentialIndex: (idx + 1) % pool.length });
+                        }
+                        else
+                        {
+                            idx = (settings.sequentialIndex || 0) % pool.length;
+                            browser.storage.local.set({ sequentialIndex: (idx + 1) % pool.length });
+                        }
                         pairsToSend.push(pool[idx]);
-                        browser.storage.local.set({ sequentialIndex: (idx + 1) % pool.length });
                     }
                 }
                 else if (pairMode === "all")
