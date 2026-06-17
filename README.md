@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.4**
+Current: **v1.2.5**
+
+### v1.2.5
+- Fixed extracting negative prompt instead of positive when "Show more" is expanded.
 
 ### v1.2.4
 - Fixed button not appearing on `/posts/*` URLs.
