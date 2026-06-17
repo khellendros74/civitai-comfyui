@@ -131,6 +131,28 @@
         let textEl = promptSection.querySelector("[data-line-clamp='true']");
         if (!textEl) textEl = panel.querySelector("[data-line-clamp='true']");
 
+        // Make sure the found element is actually inside the Prompt section header row's
+        // sibling text div, not inside the Negative prompt section below it.
+        if (textEl)
+        {
+            // Check the element is not inside a flex-col sibling that has a "Negative prompt" header
+            let negSection = null;
+            let flexCols = (promptSection.parentElement || panel).querySelectorAll("div.flex.flex-col");
+            for (let col of flexCols)
+            {
+                let hdr = col.querySelector(":scope > div > p");
+                if (hdr && hdr.textContent.trim() === "Negative prompt")
+                {
+                    negSection = col;
+                    break;
+                }
+            }
+            if (negSection && negSection.contains(textEl))
+            {
+                textEl = null; // discard — it belongs to the negative section
+            }
+        }
+
         if (textEl)
         {
             let clone = textEl.cloneNode(true);
@@ -140,35 +162,31 @@
             if (text.length > 0) return text;
         }
 
-        // Expanded state fallback: only use the FIRST flex-col child that contains
-        // the prompt text — never bleed into the negative prompt sibling section.
-        let flexCols = promptSection.querySelectorAll(":scope > div.flex.flex-col");
-        let promptCol = null;
-        for (let col of flexCols)
+        // Expanded state: positive prompt is a plain div with no data-line-clamp.
+        // It's the first dimmed text div directly after the header row.
+        // We must NOT fall into the negative prompt section below it.
+        let headerRow = promptSection.querySelector(":scope > div.flex.items-center, :scope > div > div.flex.items-center");
+        if (headerRow)
         {
-            let hdr = col.querySelector("p");
-            if (hdr && hdr.textContent.trim() === "Prompt")
+            // The prompt text element is the next sibling of the header row
+            let textDiv = headerRow.nextElementSibling;
+            while (textDiv)
             {
-                promptCol = col;
-                break;
+                // Skip if it looks like another header (contains a <p> with font-semibold)
+                let innerP = textDiv.querySelector("p");
+                if (innerP && innerP.className && innerP.className.includes("font-semibold")) break;
+
+                let clone = textDiv.cloneNode(true);
+                // Remove Show less / Show more spans
+                let toggles = clone.querySelectorAll("span.cursor-pointer, span.select-none, span.absolute");
+                for (let t of toggles) { t.remove(); }
+                let text = clone.textContent.trim();
+                if (text.length > 0) return text;
+                textDiv = textDiv.nextElementSibling;
             }
         }
-        // Fall back to first flex-col if header matching failed
-        if (!promptCol && flexCols.length > 0) promptCol = flexCols[0];
-        let targetCol = promptCol || promptSection;
 
-        let fallbackClone = targetCol.cloneNode(true);
-        // Remove header row (Prompt label + copy buttons)
-        let headerRow = fallbackClone.querySelector("div.flex.items-center");
-        if (headerRow) headerRow.remove();
-        // Remove Show less / Show more toggles
-        let toggleBtns = fallbackClone.querySelectorAll("button");
-        for (let b of toggleBtns) { b.remove(); }
-        // Remove inline Show less/more spans
-        let toggleSpans = fallbackClone.querySelectorAll("span[class*='cursor-pointer']");
-        for (let sp of toggleSpans) { sp.remove(); }
-        let fallbackText = fallbackClone.textContent.trim();
-        return fallbackText.length > 0 ? fallbackText : null;
+        return null;
     }
 
     // ── Tag extraction (individual image pages) ──────────────────────────────
