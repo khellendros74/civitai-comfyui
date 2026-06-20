@@ -597,11 +597,13 @@
                             }
                             else if (intent.mode === "sequential")
                             {
-                                let tagIndexMap = settings.tagSequentialIndex || {};
+                                // Fresh read+write to avoid stale-index race on rapid clicks
+                                let freshIdx = await browser.storage.local.get(["tagSequentialIndex"]);
+                                let tagIndexMap = freshIdx.tagSequentialIndex || {};
                                 let idx = (tagIndexMap[intent.tag] || 0) % tagPool.length;
                                 pairsToSend.push(tagPool[idx]);
                                 tagIndexMap[intent.tag] = (idx + 1) % tagPool.length;
-                                browser.storage.local.set({ tagSequentialIndex: tagIndexMap });
+                                await browser.storage.local.set({ tagSequentialIndex: tagIndexMap });
                             }
                         }
                     }
@@ -632,7 +634,7 @@
             pairsToSend.push({ workflow: workflowRaw, suffix: activeSuffix });
         }
 
-        if (isReplay)
+        if (isReplay) { /* amber state already set */ }
 
         btn.disabled = true;
         btn.style.opacity = "0.4";

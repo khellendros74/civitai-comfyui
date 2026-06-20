@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.5**
+Current: **v1.2.6**
+
+### v1.2.6
+- Fixed replay mode cycling over the same repeated workflows when clicking rapidly in sequential tag mode — sequential index is now read and written atomically per click instead of from the initial stale storage snapshot.
 
 ### v1.2.5
 - Fixed extracting negative prompt instead of positive when "Show more" is expanded.
