@@ -14,14 +14,7 @@ function checkStatus()
     {
         let url = (s.comfyUrl || "").trim();
         let hasSelection = s.selectedPairs && s.selectedPairs.length > 0;
-
-        if (!hasSelection)
-        {
-            // No workflows selected — amber badge regardless of server state
-            browser.browserAction.setBadgeBackgroundColor({ color: "#f59e0b" });
-            browser.browserAction.setBadgeText({ text: "" });
-            return;
-        }
+        let okColor = hasSelection ? "#22c55e" : "#f59e0b";
 
         if (!url)
         {
@@ -30,13 +23,16 @@ function checkStatus()
             return;
         }
 
-        fetch(url.replace(/\/$/, "") + "/system_stats", { method: "GET", signal: AbortSignal.timeout(5000) })
+        let base = url.replace(/\/$/, "");
+
+        fetch(base + "/system_stats", { method: "GET", signal: AbortSignal.timeout(5000) })
         .then(function (r)
         {
             if (r.ok)
             {
-                browser.browserAction.setBadgeBackgroundColor({ color: "#22c55e" });
+                browser.browserAction.setBadgeBackgroundColor({ color: okColor });
                 browser.browserAction.setBadgeText({ text: "✓" });
+                updateQueueBadge(base);
             }
             else
             {
@@ -52,9 +48,34 @@ function checkStatus()
     });
 }
 
-// Check on startup and every 30s
+// Queue size via lightweight GET /prompt — avoids the full /queue payload
+function updateQueueBadge(base)
+{
+    fetch(base + "/prompt", { method: "GET", signal: AbortSignal.timeout(5000) })
+    .then(function (r) { return r.json(); })
+    .then(function (data)
+    {
+        let n = (data && data.exec_info && typeof data.exec_info.queue_remaining === "number") ? data.exec_info.queue_remaining : 0;
+        browser.browserAction.setBadgeText({ text: n > 0 ? (n > 99 ? "99+" : String(n)) : "✓" });
+    })
+    .catch(function ()
+    {
+        browser.browserAction.setBadgeText({ text: "✓" });
+    });
+}
+
+// Check on startup and every 60s
 checkStatus();
-setInterval(checkStatus, 30000);
+setInterval(checkStatus, 60000);
+
+// Debounced trigger — collapses bursts (e.g. "All" / tag-group sends firing
+// one COMFYUI_FETCH per pair) into a single status+queue check after the burst settles
+let checkStatusDebounceTimer = null;
+function scheduleCheckStatus()
+{
+    clearTimeout(checkStatusDebounceTimer);
+    checkStatusDebounceTimer = setTimeout(checkStatus, 800);
+}
 
 // React immediately when selectedPairs changes
 browser.storage.onChanged.addListener(function (changes)
@@ -68,8 +89,8 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse)
     if (message.type === "COMFYUI_PING")
     {
         fetch(message.url, { method: "GET", signal: AbortSignal.timeout(5000) })
-        .then(function (r) { sendResponse({ ok: r.ok }); checkStatus(); })
-        .catch(function ()  { sendResponse({ ok: false }); checkStatus(); });
+        .then(function (r) { sendResponse({ ok: r.ok }); scheduleCheckStatus(); })
+        .catch(function ()  { sendResponse({ ok: false }); scheduleCheckStatus(); });
         return true;
     }
 
@@ -86,11 +107,13 @@ browser.runtime.onMessage.addListener(function (message, sender, sendResponse)
         return response.text().then(function (text)
         {
             sendResponse({ ok: response.ok, status: response.status, body: text });
+            scheduleCheckStatus();
         });
     })
     .catch(function (e)
     {
         sendResponse({ ok: false, status: 0, error: e.message });
+        scheduleCheckStatus();
     });
 
     return true;

@@ -88,7 +88,14 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.6**
+Current: **v1.2.7**
+
+### v1.2.7
+- Toolbar badge now shows the ComfyUI queue size (pending jobs) instead of a plain checkmark, via a lightweight `GET /prompt` poll. Auto-poll slowed to 60s; multi-workflow "All"/tag-group sends now trigger a single debounced status refresh instead of one per workflow.
+- Amber (no workflow selected) now behaves like green: still pings the server and shows the queue count, just tinted amber to signal replay mode.
+- Options page logo now mirrors all four toolbar states (gray/red/amber/normal), refreshed on load, every 30s, after Test Connection, and immediately on selection change.
+- Added a live "N of M selected" count plus Select all / Deselect all buttons above the workflow list in Random/Sequential/All modes.
+- Corrected workflow-mode helper text that predated replay mode ("Check at least one" was no longer accurate) and added a persistent explainer for amber/replay behavior under the Mode selector.
 
 ### v1.2.6
 - Fixed replay mode cycling over the same repeated workflows when clicking rapidly in sequential tag mode — sequential index is now read and written atomically per click instead of from the initial stale storage snapshot.

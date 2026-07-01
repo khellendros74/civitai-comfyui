@@ -37,6 +37,22 @@
         showStatus._timer = setTimeout(function () { statusEl.className = "hidden"; }, 3000);
     }
 
+    // ── Beautify button ────────────────────────────────────────────────────────
+
+    document.getElementById("beautifyWfBtn").addEventListener("click", function ()
+    {
+        let raw = wfInput.value.trim();
+        if (!raw) return;
+        try
+        {
+            wfInput.value = JSON.stringify(JSON.parse(raw), null, 2);
+        }
+        catch (e)
+        {
+            showStatus("Invalid JSON — cannot beautify.", true);
+        }
+    });
+
     // ── Pair mode UI ───────────────────────────────────────────────────────────
 
     function getPairMode()
@@ -73,18 +89,18 @@
         }
         else if (mode === "random")
         {
-            pairModeLabel.textContent = "Select workflows to pick from (random each run)";
-            pairModeHint.textContent  = "Check at least one. One will be chosen at random on each send.";
+            pairModeLabel.textContent = "Select workflows to pick from";
+            pairModeHint.textContent  = "One is chosen at random on each send.";
         }
         else if (mode === "sequential")
         {
-            pairModeLabel.textContent = "Select workflows to cycle through (in order, looping)";
-            pairModeHint.textContent  = "Check at least one. Each send advances to the next, looping back to the first.";
+            pairModeLabel.textContent = "Select workflows to cycle through";
+            pairModeHint.textContent  = "Each send advances to the next, looping back to the first.";
         }
         else if (mode === "all")
         {
             pairModeLabel.textContent = "Select workflows to send all at once";
-            pairModeHint.textContent  = "All checked workflows will be queued in ComfyUI with a single click.";
+            pairModeHint.textContent  = "All checked workflows are sent together in one click.";
         }
         renderPairList(mode);
     }
@@ -166,6 +182,52 @@
             let container = document.createElement("div");
             container.className = "model-checkbox-list";
 
+            function updateCountLabel()
+            {
+                if (!countLabel) return;
+                let n = container.querySelectorAll("input[type='checkbox']:checked").length;
+                countLabel.textContent = n + " of " + sorted.length + " selected";
+            }
+
+            let controlsRow = null;
+            let countLabel  = null;
+            if (mode !== "static")
+            {
+                controlsRow = document.createElement("div");
+                controlsRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;";
+
+                countLabel = document.createElement("span");
+                countLabel.style.cssText = "font-size:11px;color:#64748b;";
+                controlsRow.appendChild(countLabel);
+
+                let btnGroup = document.createElement("span");
+                btnGroup.style.cssText = "display:flex;gap:6px;";
+
+                let selectAllBtn = document.createElement("button");
+                selectAllBtn.type = "button";
+                selectAllBtn.textContent = "Select all";
+                selectAllBtn.style.cssText = "padding:2px 10px;font-size:11px;border-radius:4px;border:1px solid #2d2b55;background:transparent;color:#94a3b8;cursor:pointer;";
+                selectAllBtn.addEventListener("click", function ()
+                {
+                    for (let cb of container.querySelectorAll("input[type='checkbox']")) { cb.checked = true; }
+                    updateCountLabel();
+                });
+
+                let deselectAllBtn = document.createElement("button");
+                deselectAllBtn.type = "button";
+                deselectAllBtn.textContent = "Deselect all";
+                deselectAllBtn.style.cssText = selectAllBtn.style.cssText;
+                deselectAllBtn.addEventListener("click", function ()
+                {
+                    for (let cb of container.querySelectorAll("input[type='checkbox']")) { cb.checked = false; }
+                    updateCountLabel();
+                });
+
+                btnGroup.appendChild(selectAllBtn);
+                btnGroup.appendChild(deselectAllBtn);
+                controlsRow.appendChild(btnGroup);
+            }
+
             for (let pair of sorted)
             {
                 let row = document.createElement("div");
@@ -183,6 +245,7 @@
                     if (mode === "static") input.checked = (pair.name === staticPair);
                     else                   input.checked = selectedPairs.includes(pair.name);
                     input.style.cssText = "accent-color:#7c6af7;flex-shrink:0;cursor:pointer;";
+                    if (input.type === "checkbox") input.addEventListener("change", updateCountLabel);
                     row.appendChild(input);
                 }
 
@@ -245,6 +308,7 @@
                         r.style.background  = "#1a1a35";
                         r.style.borderLeft  = "2px solid #7c6af7";
                         r.style.paddingLeft = "8px";
+                        updateCountLabel();
 
                         suffixInput.value   = p.suffix || "";
                         wfInput.value       = p.workflow || "";
@@ -261,7 +325,9 @@
                 container.appendChild(row);
             }
 
+            if (controlsRow) pairListEl.appendChild(controlsRow);
             pairListEl.appendChild(container);
+            updateCountLabel();
         });
     }
 
@@ -300,7 +366,7 @@
             let pairs = s.pairs || [];
             let defaultEntry = pairs.find(function (p) { return p.isDefault; });
             pairs = pairs.filter(function (p) { return p.name !== name && !p.isDefault; });
-            pairs.push({ name: name, workflow: wf, suffix: suffix, tags: tags, bannedTags: bannedTags, savedAt: Date.now() });
+            pairs.push({ name: name, workflow: compressJson(wf), suffix: suffix, tags: tags, bannedTags: bannedTags, savedAt: Date.now() });
             if (defaultEntry) pairs.unshift(defaultEntry);
             browser.storage.local.set({ pairs }).then(function ()
             {
@@ -496,6 +562,40 @@
 
     // ── Load settings ──────────────────────────────────────────────────────────
 
+    // ── App logo state (mirrors toolbar badge colors) ───────────────────────────
+
+    function updateLogoState(url, reachable)
+    {
+        let logo = document.getElementById("appLogo");
+        if (!logo) return;
+
+        browser.storage.local.get(["selectedPairs"]).then(function (s)
+        {
+            let hasSelection = s.selectedPairs && s.selectedPairs.length > 0;
+
+            if (!url || !url.trim())
+            {
+                logo.style.filter  = "grayscale(1)";
+                logo.style.opacity = "0.5";
+            }
+            else if (reachable === false)
+            {
+                logo.style.filter  = "grayscale(1) sepia(1) saturate(3) hue-rotate(300deg)";
+                logo.style.opacity = "0.7";
+            }
+            else if (!hasSelection)
+            {
+                logo.style.filter  = "sepia(1) saturate(4) hue-rotate(5deg)";
+                logo.style.opacity = "0.9";
+            }
+            else
+            {
+                logo.style.filter  = "";
+                logo.style.opacity = "1";
+            }
+        });
+    }
+
     function updateServerBanner(url)
     {
         let banner = document.getElementById("serverStatusBanner");
@@ -514,6 +614,7 @@
         if (!url || !url.trim())
         {
             setBanner("#64748b", "No server configured");
+            updateLogoState(url, null);
             return;
         }
         setBanner("#94a3b8", "Checking…");
@@ -521,15 +622,31 @@
         .then(function (r)
         {
             if (r.ok)
+            {
                 setBanner("#6ee7b7", "ComfyUI reachable");
+                updateLogoState(url, true);
+            }
             else
+            {
                 setBanner("#f87171", "Server error " + r.status);
+                updateLogoState(url, false);
+            }
         })
         .catch(function ()
         {
             setBanner("#f87171", "ComfyUI unreachable");
+            updateLogoState(url, false);
         });
     }
+
+    // Re-check periodically while the options page stays open
+    setInterval(function () { updateServerBanner(urlInput.value.trim()); }, 30000);
+
+    // Reflect selection changes immediately (e.g. after Save, or another tab editing storage)
+    browser.storage.onChanged.addListener(function (changes)
+    {
+        if (changes.selectedPairs) updateLogoState(urlInput.value.trim(), null);
+    });
 
     browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair"]).then(function (s)
     {
@@ -634,7 +751,7 @@
 
             // Update Default
             pairs = pairs.filter(function (p) { return !p.isDefault; });
-            pairs.unshift({ name: "Default", workflow: wf, suffix: suffix, isDefault: true });
+            pairs.unshift({ name: "Default", workflow: compressJson(wf), suffix: suffix, isDefault: true });
 
             // If a named pair is loaded in the fields, update it too
             if (loadedPairName && loadedPairName !== "Default")
@@ -646,7 +763,7 @@
                     let newTags = pairTagsInput ? pairTagsInput.value.trim() : existingTags;
                     let existingBanned = pairs[idx].bannedTags || "";
                     let newBanned = pairBannedTagsInput ? pairBannedTagsInput.value.trim() : existingBanned;
-                    pairs[idx] = { name: loadedPairName, workflow: wf, suffix: suffix, tags: newTags, bannedTags: newBanned, savedAt: Date.now() };
+                    pairs[idx] = { name: loadedPairName, workflow: compressJson(wf), suffix: suffix, tags: newTags, bannedTags: newBanned, savedAt: Date.now() };
                 }
             }
 
@@ -862,6 +979,13 @@
     });
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function compressJson(raw)
+    {
+        if (!raw || !raw.trim()) return raw;
+        try { return JSON.stringify(JSON.parse(raw)); }
+        catch (e) { return raw; }
+    }
 
     function validateWorkflow(raw)
     {
