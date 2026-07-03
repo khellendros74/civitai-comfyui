@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.7**
+Current: **v1.2.8**
+
+### v1.2.8
+- Content script now also runs on `/collections/*` pages, so the ComfyUI button is injected into image popovers there too.
 
 ### v1.2.7
 - Toolbar badge now shows the ComfyUI queue size (pending jobs) instead of a plain checkmark, via a lightweight `GET /prompt` poll. Auto-poll slowed to 60s; multi-workflow "All"/tag-group sends now trigger a single debounced status refresh instead of one per workflow.
