@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.8**
+Current: **v1.2.9**
+
+### v1.2.9
+- Ctrl+click the toolbar icon to cancel the prompts queued from your last send (blue button, tag button, or context menu action) — only pending, not-yet-started jobs are removed from ComfyUI's queue.
 
 ### v1.2.8
 - Content script now also runs on `/collections/*` pages, so the ComfyUI button is injected into image popovers there too.

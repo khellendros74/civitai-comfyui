@@ -315,6 +315,27 @@
 
     // ── ComfyUI send ───────────────────────────────────────────────────────────
 
+    // Marks the start of a fresh user-initiated send action — clears the
+    // background script's pending-ids list so a toolbar Ctrl+click cancel
+    // only targets prompts from this action.
+    function startNewBatch()
+    {
+        browser.runtime.sendMessage({ type: "COMFYUI_START_BATCH" });
+    }
+
+    // Reports a queued prompt's id to the background script for cancel tracking.
+    // response.body is the raw text from ComfyUI's /prompt endpoint.
+    function trackPromptIdFromResponse(responseBody)
+    {
+        try
+        {
+            let json = JSON.parse(responseBody);
+            if (json && json.prompt_id)
+                browser.runtime.sendMessage({ type: "COMFYUI_TRACK_PROMPT_ID", id: json.prompt_id });
+        }
+        catch (e) {}
+    }
+
     function filterBannedTags(prompt, bannedRaw)
     {
         if (!bannedRaw || !bannedRaw.trim()) return prompt;
@@ -636,6 +657,8 @@
 
         if (isReplay) { /* amber state already set */ }
 
+        startNewBatch();
+
         btn.disabled = true;
         btn.style.opacity = "0.4";
 
@@ -697,6 +720,7 @@
                 if (response && response.ok)
                 {
                     sendCount++;
+                    trackPromptIdFromResponse(response.body);
                 }
                 else if (response)
                 {
@@ -939,6 +963,7 @@
                         {
                             let mode = cfg.pairMode || "static";
                             removeContextMenu();
+                            startNewBatch();
                             if (mode === "all")
                             {
                                 browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
@@ -974,13 +999,14 @@
 
                 sub.appendChild(makeItem("All " + tagLabel, true, (function (tp, tl) { return function ()
                 {
+                    startNewBatch();
                     browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
                     for (let p of tp) { sendWithSpecificPair(prompt, p, btn); }
                 }; })(tagPairs, tagLabel)));
                 sub.appendChild(makeDivider());
                 for (let p of tagPairs)
                 {
-                    sub.appendChild(makeItem(p.name, false, (function (pair) { return function () { browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn); }; })(p)));
+                    sub.appendChild(makeItem(p.name, false, (function (pair) { return function () { startNewBatch(); browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn); }; })(p)));
                 }
 
                 document.documentElement.appendChild(sub);
@@ -1067,6 +1093,7 @@
 
             menu.appendChild(makeItem("All workflows", true, function ()
             {
+                startNewBatch();
                 browser.storage.local.set({ lastSentIntent: { type: "all" } });
                 for (let p of pairs) { sendWithSpecificPair(prompt, p, btn); }
             }));
@@ -1098,7 +1125,7 @@
                 if (sortedTags.length > 0) menu.appendChild(makeDivider());
                 for (let p of untagged)
                 {
-                    menu.appendChild(makeItem(p.name, false, (function (pair) { return function () { browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn); }; })(p)));
+                    menu.appendChild(makeItem(p.name, false, (function (pair) { return function () { startNewBatch(); browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn); }; })(p)));
                 }
             }
 
@@ -1181,6 +1208,7 @@
             }
             if (response && response.ok)
             {
+                trackPromptIdFromResponse(response.body);
                 showToast("✅ Sent with: " + pair.name);
                 if (last) showBtnSuccess(btn);
             }

@@ -1,10 +1,41 @@
 // background.js
 
-// ── Open options on toolbar click ─────────────────────────────────────────────
-browser.browserAction.onClicked.addListener(function ()
+// ── Toolbar click: open options — Ctrl+click: cancel queued (not yet started) prompts ──
+browser.browserAction.onClicked.addListener(function (tab, info)
 {
+    if (info && info.modifiers && info.modifiers.indexOf("Ctrl") !== -1)
+    {
+        cancelLastBatch();
+        return;
+    }
     browser.runtime.openOptionsPage();
 });
+
+// Ids of prompts queued by the last user-initiated send action (in-memory only)
+let currentBatchIds = [];
+
+function cancelLastBatch()
+{
+    if (currentBatchIds.length === 0) return;
+
+    browser.storage.local.get(["comfyUrl"]).then(function (s)
+    {
+        let url = (s.comfyUrl || "").trim().replace(/\/$/, "");
+        if (!url) return;
+
+        let idsToDelete = currentBatchIds;
+        currentBatchIds = [];
+
+        fetch(url + "/queue",
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ delete: idsToDelete })
+        })
+        .then(function () { scheduleCheckStatus(); })
+        .catch(function () {});
+    });
+}
 
 // ── Icon / badge based on server status + selection state ─────────────────────
 
@@ -86,6 +117,18 @@ browser.storage.onChanged.addListener(function (changes)
 // ── Message handler ────────────────────────────────────────────────────────────
 browser.runtime.onMessage.addListener(function (message, sender, sendResponse)
 {
+    if (message.type === "COMFYUI_START_BATCH")
+    {
+        currentBatchIds = [];
+        return;
+    }
+
+    if (message.type === "COMFYUI_TRACK_PROMPT_ID")
+    {
+        if (message.id) currentBatchIds.push(message.id);
+        return;
+    }
+
     if (message.type === "COMFYUI_PING")
     {
         fetch(message.url, { method: "GET", signal: AbortSignal.timeout(5000) })
