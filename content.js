@@ -203,7 +203,7 @@
         }
 
         // Tags are in <a> elements inside VotableTag_mainBadge elements
-        let tagLinks = container.querySelectorAll("[class*='VotableTag_mainBadge'] a[data-activity*='tag-click']");
+        let tagLinks = container.querySelectorAll("[class*='mainBadge'] a[data-activity*='tag-click']");
         let tags = [];
         for (let a of tagLinks)
         {
@@ -219,7 +219,7 @@
         let groups = document.querySelectorAll(".mantine-Group-root");
         for (let group of groups)
         {
-            if (group.querySelector("[class*='VotableTag_mainBadge']"))
+            if (group.querySelector("[class*='mainBadge']"))
             {
                 return group;
             }

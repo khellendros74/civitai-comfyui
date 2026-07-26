@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "CivitAI \u2192 ComfyUI",
-  "version": "1.2.9",
+  "version": "1.2.10",
   "description": "Send CivitAI image prompts directly to your ComfyUI instance.",
   "permissions": [
     "storage",

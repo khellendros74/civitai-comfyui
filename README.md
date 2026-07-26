@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.9**
+Current: **v1.2.10**
+
+### v1.2.10
+- Fixed tag button/context menu no longer appearing on image pages after CivitAI renamed the tag badge CSS class (`VotableTag_mainBadge` → `VotableTag-module-scss-module__XXXXXX__mainBadge`). Tag detection now matches on the stable `mainBadge` suffix instead.
 
 ### v1.2.9
 - Ctrl+click the toolbar icon to cancel the prompts queued from your last send (blue button, tag button, or context menu action) — only pending, not-yet-started jobs are removed from ComfyUI's queue.
