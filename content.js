@@ -96,6 +96,56 @@
     checkServerAvailability();
     setInterval(checkServerAvailability, 30000);
 
+    // ── Image id resolution ──────────────────────────────────────────────────────
+
+    // Feed/model-page cards open a popover instead of navigating, so the id is
+    // never in the URL there. We capture it from the card's DOM the moment the
+    // "i" (Generation data) button is clicked — that's what opens the popover.
+    let lastOpenedImageId = null;
+
+    document.addEventListener("click", function (e)
+    {
+        let infoBtn = e.target.closest("button[aria-label='Generation data']");
+        if (!infoBtn) return;
+
+        let container = infoBtn.closest("div.relative.flex-1");
+        if (!container) { lastOpenedImageId = null; return; }
+
+        let id = null;
+        let link = container.querySelector("a[href*='/images/']");
+        if (link)
+        {
+            let m = link.getAttribute("href").match(/\/images\/(\d+)/);
+            if (m) id = m[1];
+        }
+
+        if (!id)
+        {
+            let img = container.querySelector("img");
+            if (img)
+            {
+                let m2 = img.src.match(/(\d+)\.\w+(?:\?|$)/);
+                if (m2) id = m2[1];
+            }
+        }
+
+        lastOpenedImageId = id;
+    }, true);
+
+    // On individual image/post pages the id is already in the URL.
+    function getImageIdFromUrl()
+    {
+        let m = location.pathname.match(/\/images\/(\d+)/);
+        return m ? m[1] : null;
+    }
+
+    // URL takes priority (it's authoritative for the current page); the
+    // popover-captured id is only relevant on feed/model pages.
+    function resolveImageId()
+    {
+        return getImageIdFromUrl() || lastOpenedImageId;
+    }
+
     // ── Prompt extraction ──────────────────────────────────────────────────────
 
     function extractPromptFromPanel(panel)
@@ -283,7 +333,7 @@
             e.stopPropagation();
             let tags = await expandAndGrabTags(container);
             if (!tags) return;
-            showWorkflowContextMenu(e, tags, tagBtn);
+            showWorkflowContextMenu(e, tags, tagBtn, resolveImageId());
         }, true);
 
         tagBtn.addEventListener("click", async function (e)
@@ -305,7 +355,7 @@
                 return;
             }
 
-            sendToComfyUI(tags, tagBtn);
+            sendToComfyUI(tags, tagBtn, resolveImageId());
         });
 
         // Insert as the first child of the group
@@ -370,7 +420,7 @@
         return tags.join(",");
     }
 
-    function buildPayload(prompt, workflowTemplate, modelOverride, seedMode, staticSeed)
+    function buildPayload(prompt, workflowTemplate, modelOverride, seedMode, staticSeed, imageId)
     {
         let workflow = JSON.parse(JSON.stringify(workflowTemplate));
 
@@ -509,10 +559,19 @@
             }
         }
 
-        return { prompt: workflow };
+        let payload = { prompt: workflow };
+
+        // Only attach source metadata when we actually resolved an id —
+        // never inject a null/empty civitai_image_id.
+        if (imageId)
+        {
+            payload.extra_data = { extra_pnginfo: { civitai_image_id: imageId } };
+        }
+
+        return payload;
     }
 
-    async function sendToComfyUI(prompt, btn)
+    async function sendToComfyUI(prompt, btn, imageId)
     {
         let settings = await browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair", "sequentialIndex", "sequentialStarted", "tagSequentialIndex", "lastSentIntent"]);
         let comfyUrl = (settings.comfyUrl || "").replace(/\/$/, "");
@@ -712,7 +771,7 @@
             else if (modelMode === "random" && settings.selectedModels && settings.selectedModels.length > 0)
                 modelToInject = settings.selectedModels[Math.floor(Math.random() * settings.selectedModels.length)];
 
-            let payload = buildPayload(finalPrompt, workflowTemplate, modelToInject, seedMode, sharedSeed);
+            let payload = buildPayload(finalPrompt, workflowTemplate, modelToInject, seedMode, sharedSeed, imageId);
 
             browser.runtime.sendMessage({ type: "COMFYUI_FETCH", url: comfyUrl + "/prompt", body: JSON.stringify(payload) })
             .then(function (response)
@@ -866,7 +925,7 @@
         }
     }
 
-    function showWorkflowContextMenu(e, prompt, btn)
+    function showWorkflowContextMenu(e, prompt, btn, imageId)
     {
         e.preventDefault();
         e.stopPropagation();
@@ -967,20 +1026,20 @@
                             if (mode === "all")
                             {
                                 browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
-                                for (let p of tp) { sendWithSpecificPair(prompt, p, btn); }
+                                for (let p of tp) { sendWithSpecificPair(prompt, p, btn, imageId); }
                             }
                             else if (mode === "random")
                             {
                                 let pick = tp[Math.floor(Math.random() * tp.length)];
                                 browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "random" } });
-                                sendWithSpecificPair(prompt, pick, btn);
+                                sendWithSpecificPair(prompt, pick, btn, imageId);
                             }
                             else if (mode === "sequential")
                             {
                                 let tagIndexMap = cfg.tagSequentialIndex || {};
                                 let idx = (tagIndexMap[tl] || 0) % tp.length;
                                 browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "sequential" } });
-                                sendWithSpecificPair(prompt, tp[idx], btn);
+                                sendWithSpecificPair(prompt, tp[idx], btn, imageId);
                                 tagIndexMap[tl] = (idx + 1) % tp.length;
                                 browser.storage.local.set({ tagSequentialIndex: tagIndexMap });
                             }
@@ -988,7 +1047,7 @@
                             {
                                 // Static: send all for this tag
                                 browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
-                                for (let p of tp) { sendWithSpecificPair(prompt, p, btn); }
+                                for (let p of tp) { sendWithSpecificPair(prompt, p, btn, imageId); }
                             }
                         });
                     };
@@ -1001,12 +1060,12 @@
                 {
                     startNewBatch();
                     browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
-                    for (let p of tp) { sendWithSpecificPair(prompt, p, btn); }
+                    for (let p of tp) { sendWithSpecificPair(prompt, p, btn, imageId); }
                 }; })(tagPairs, tagLabel)));
                 sub.appendChild(makeDivider());
                 for (let p of tagPairs)
                 {
-                    sub.appendChild(makeItem(p.name, false, (function (pair) { return function () { startNewBatch(); browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn); }; })(p)));
+                    sub.appendChild(makeItem(p.name, false, (function (pair) { return function () { startNewBatch(); browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn, imageId); }; })(p)));
                 }
 
                 document.documentElement.appendChild(sub);
@@ -1095,7 +1154,7 @@
             {
                 startNewBatch();
                 browser.storage.local.set({ lastSentIntent: { type: "all" } });
-                for (let p of pairs) { sendWithSpecificPair(prompt, p, btn); }
+                for (let p of pairs) { sendWithSpecificPair(prompt, p, btn, imageId); }
             }));
             menu.appendChild(makeDivider());
 
@@ -1125,7 +1184,7 @@
                 if (sortedTags.length > 0) menu.appendChild(makeDivider());
                 for (let p of untagged)
                 {
-                    menu.appendChild(makeItem(p.name, false, (function (pair) { return function () { startNewBatch(); browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn); }; })(p)));
+                    menu.appendChild(makeItem(p.name, false, (function (pair) { return function () { startNewBatch(); browser.storage.local.set({ lastSentIntent: { type: "named", names: [pair.name] } }); sendWithSpecificPair(prompt, pair, btn, imageId); }; })(p)));
                 }
             }
 
@@ -1158,7 +1217,7 @@
     // Track pending sends per button to avoid premature restore
     let btnPendingMap = new WeakMap();
 
-    async function sendWithSpecificPair(prompt, pair, btn)
+    async function sendWithSpecificPair(prompt, pair, btn, imageId)
     {
         let settings = await browser.storage.local.get(["comfyUrl", "globalBannedTags", "modelMode", "selectedModels", "staticModel", "seedMode"]);
         let comfyUrl = (settings.comfyUrl || "").replace(/\/$/, "");
@@ -1190,7 +1249,7 @@
 
         let seedMode = settings.seedMode || "workflow";
         let staticSeedCtx = (seedMode === "static") ? Math.floor(Math.random() * 2147483647) : null;
-        let payload  = buildPayload(finalPrompt, workflowTemplate, modelToInject, seedMode, staticSeedCtx);
+        let payload  = buildPayload(finalPrompt, workflowTemplate, modelToInject, seedMode, staticSeedCtx, imageId);
 
 
         browser.runtime.sendMessage({ type: "COMFYUI_FETCH", url: comfyUrl + "/prompt", body: JSON.stringify(payload) })
@@ -1323,7 +1382,7 @@
             e.stopPropagation();
             let prompt = extractPromptFromPanel(panel);
             if (!prompt) { showToast("⚠️ Could not find prompt text."); return; }
-            showWorkflowContextMenu(e, prompt, btn);
+            showWorkflowContextMenu(e, prompt, btn, resolveImageId());
         }, true);
 
         btn.addEventListener("click", function (e)
@@ -1338,7 +1397,7 @@
                 showToast("⚠️ Could not find prompt text.");
                 return;
             }
-            sendToComfyUI(prompt, btn);
+            sendToComfyUI(prompt, btn, resolveImageId());
         });
 
         applyServerState(btn);

@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.2.10**
+Current: **v1.3.0**
+
+### v1.3.0
+- The extension now resolves the source CivitAI image id for a sent prompt — from the URL on individual `/images/{id}` pages, or captured from the card's DOM at the moment the popover's "Generation data" icon is clicked on feed/model pages. When resolved, it's attached to the ComfyUI `/prompt` request as `extra_data.extra_pnginfo.civitai_image_id`, so it gets embedded in the output PNG's metadata. No id is ever sent if it can't be resolved.
 
 ### v1.2.10
 - Fixed tag button/context menu no longer appearing on image pages after CivitAI renamed the tag badge CSS class (`VotableTag_mainBadge` → `VotableTag-module-scss-module__XXXXXX__mainBadge`). Tag detection now matches on the stable `mainBadge` suffix instead.
