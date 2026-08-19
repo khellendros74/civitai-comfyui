@@ -88,7 +88,13 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.3.0**
+Current: **v1.4.0**
+
+### v1.4.0
+- Added a native right-click ("Send prompt to ComfyUI" / "Send with workflow") menu on CivitAI's `/images` feed, since it no longer exposes a per-card generation-data panel for the button to attach to. It reads the prompt straight from the image file's embedded metadata (EXIF/PNG text — CivitAI's own JSON, native ComfyUI PNG graphs, or A1111-style text), so it works with no dependency on CivitAI's page markup.
+- Extraction now also pulls seed, steps, cfg, sampler, scheduler and checkpoint from the source image (when present) and applies them on top of your saved workflow — only for settings you haven't explicitly overridden (static/random model or seed mode still win).
+- The native menu mirrors the injected button's tag-grouped, alphabetized submenus, default-send replay-last-intent behavior, and random/sequential tag modes (including randomizing the first pick before cycling predictably).
+- Refactored the embedded-metadata parser, payload builder, and tag-mode resolution into a shared `shared.js` module used by both the content script and the background script, so the two menus can't drift out of sync again.
 
 ### v1.3.0
 - The extension now resolves the source CivitAI image id for a sent prompt — from the URL on individual `/images/{id}` pages, or captured from the card's DOM at the moment the popover's "Generation data" icon is clicked on feed/model pages. When resolved, it's attached to the ComfyUI `/prompt` request as `extra_data.extra_pnginfo.civitai_image_id`, so it gets embedded in the output PNG's metadata. No id is ever sent if it can't be resolved.

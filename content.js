@@ -96,12 +96,19 @@
     checkServerAvailability();
     setInterval(checkServerAvailability, 30000);
 
+    // Lets background.js (native right-click menu path) reuse the toast UI.
+    browser.runtime.onMessage.addListener(function (message)
+    {
+        if (message && message.type === "COMFYUI_TOAST") showToast(message.message);
+    });
+
     // ── Image id resolution ──────────────────────────────────────────────────────
 
     // Feed/model-page cards open a popover instead of navigating, so the id is
     // never in the URL there. We capture it from the card's DOM the moment the
     // "i" (Generation data) button is clicked — that's what opens the popover.
     let lastOpenedImageId = null;
+    let lastOpenedImageSrc = null;
 
     document.addEventListener("click", function (e)
     {
@@ -109,7 +116,7 @@
         if (!infoBtn) return;
 
         let container = infoBtn.closest("div.relative.flex-1");
-        if (!container) { lastOpenedImageId = null; return; }
+        if (!container) { lastOpenedImageId = null; lastOpenedImageSrc = null; return; }
 
         let id = null;
         let link = container.querySelector("a[href*='/images/']");
@@ -119,17 +126,16 @@
             if (m) id = m[1];
         }
 
-        if (!id)
+        let img = container.querySelector("img");
+
+        if (!id && img)
         {
-            let img = container.querySelector("img");
-            if (img)
-            {
-                let m2 = img.src.match(/(\d+)\.\w+(?:\?|$)/);
-                if (m2) id = m2[1];
-            }
+            let m2 = img.src.match(/(\d+)\.\w+(?:\?|$)/);
+            if (m2) id = m2[1];
         }
 
-        lastOpenedImageId = id;
+        lastOpenedImageId  = id;
+        lastOpenedImageSrc = img ? img.src : null;
     }, true);
 
     // On individual image/post pages the id is already in the URL.
@@ -234,6 +240,66 @@
                 if (text.length > 0) return text;
                 textDiv = textDiv.nextElementSibling;
             }
+        }
+
+        return null;
+    }
+
+    // ── Embedded-metadata fallback (used when the DOM prompt section is empty) ──
+    // CivitAI's own generation images still carry the full prompt inside the
+    // image file itself (EXIF UserComment / PNG text chunks). If the on-page
+    // panel has no prompt text, we fetch the image and read it from there.
+
+    function resolveImageSrc(panel)
+    {
+        let img = panel.querySelector("img[src*='civitai']");
+        if (img) return img.src;
+
+        if (lastOpenedImageSrc) return lastOpenedImageSrc;
+
+        let id = resolveImageId();
+        if (id)
+        {
+            let all = document.querySelectorAll("img");
+            for (let candidate of all)
+            {
+                if (candidate.src && candidate.src.indexOf(id) !== -1) return candidate.src;
+            }
+        }
+
+        return null;
+    }
+
+    function getMetadataCandidateUrls(src)
+    {
+        let urls = [src];
+
+        // CivitAI's CDN re-encodes/strips metadata under optimized=true delivery.
+        // original=true asks the CDN for the un-re-encoded source file instead.
+        if (src.indexOf("optimized=true") !== -1)
+        {
+            urls.push(src.replace("optimized=true", "original=true"));
+        }
+
+        return urls;
+    }
+
+    async function tryFallbackPrompt(panel)
+    {
+        let src = resolveImageSrc(panel);
+        if (!src) return null;
+
+        for (let url of getMetadataCandidateUrls(src))
+        {
+            try
+            {
+                let response = await browser.runtime.sendMessage({ type: "FETCH_IMAGE_METADATA", url: url });
+                if (response && response.ok && response.result && response.result.prompt)
+                {
+                    return response.result.prompt;
+                }
+            }
+            catch (e) {}
         }
 
         return null;
@@ -386,190 +452,8 @@
         catch (e) {}
     }
 
-    function filterBannedTags(prompt, bannedRaw)
-    {
-        if (!bannedRaw || !bannedRaw.trim()) return prompt;
-
-        // Parse banned list: trim each entry, separate wildcards from exact
-        let rules = bannedRaw.split(",").map(function (r) { return r.trim(); }).filter(Boolean);
-
-        // Split prompt into individual tags preserving spacing style
-        let tags = prompt.split(",");
-
-        tags = tags.filter(function (tag)
-        {
-            let trimmed = tag.trim().toLowerCase();
-            for (let rule of rules)
-            {
-                let isWildcard = rule.charAt(rule.length - 1) === "*";
-                let base = isWildcard ? rule.slice(0, -1).toLowerCase() : rule.toLowerCase();
-                if (isWildcard)
-                {
-                    // Remove any tag containing the base string
-                    if (trimmed.indexOf(base) !== -1) return false;
-                }
-                else
-                {
-                    // Exact match only
-                    if (trimmed === base) return false;
-                }
-            }
-            return true;
-        });
-
-        return tags.join(",");
-    }
-
-    function buildPayload(prompt, workflowTemplate, modelOverride, seedMode, staticSeed, imageId)
-    {
-        let workflow = JSON.parse(JSON.stringify(workflowTemplate));
-
-        // ── Step 1: trace graph to find negative CLIPTextEncode node IDs ──────
-        // KSampler / KSamplerAdvanced connect: positive → nodeId, negative → nodeId
-        // We collect all node IDs wired into a "negative" input of any sampler
-
-        let negativeNodeIds = new Set();
-
-        let samplerTypes = [
-            "KSampler", "KSamplerAdvanced", "SamplerCustom",
-            "KSamplerSelect", "KSampler (Efficient)", "ToBasicPipe",
-            "DetailerForEach", "FaceDetailer"
-        ];
-
-        for (let nodeId in workflow)
-        {
-            let node = workflow[nodeId];
-            if (!node.inputs) continue;
-
-            let isSampler = samplerTypes.includes(node.class_type);
-
-            for (let inputKey in node.inputs)
-            {
-                let val = node.inputs[inputKey];
-
-                // Node references are arrays: [connectedNodeId, outputIndex]
-                if (!Array.isArray(val) || val.length !== 2) continue;
-
-                let connectedId = String(val[0]);
-                let keyLower = inputKey.toLowerCase();
-
-                // Direct negative input on a sampler
-                if (isSampler && keyLower === "negative")
-                {
-                    negativeNodeIds.add(connectedId);
-                }
-
-                // Conditioning passthrough nodes (e.g. ControlNetApplyAdvanced)
-                // that feed into negative — mark them too and trace recursively
-                if (keyLower === "negative" || keyLower === "negative_conditioning")
-                {
-                    negativeNodeIds.add(connectedId);
-                }
-            }
-        }
-
-        // Recursively trace upstream ONLY through conditioning passthrough nodes
-        // (nodes that take conditioning as input and output conditioning)
-        // This avoids incorrectly marking shared CLIP/model nodes as negative
-        let conditioningPassthroughs = [
-            "ControlNetApplyAdvanced", "ControlNetApply",
-            "CLIPTextEncodeSDXL", "ConditioningCombine",
-            "ConditioningAverage", "ConditioningSetArea",
-            "ConditioningSetTimestepRange", "ConditioningConcat",
-            "IPAdapterApply", "IPAdapterApplyEncoded"
-        ];
-
-        let changed = true;
-        while (changed)
-        {
-            changed = false;
-            for (let nodeId in workflow)
-            {
-                if (!negativeNodeIds.has(nodeId)) continue;
-                let node = workflow[nodeId];
-                if (!node.inputs) continue;
-
-                // Only follow upstream through known conditioning nodes
-                if (!conditioningPassthroughs.includes(node.class_type)) continue;
-
-                for (let inputKey in node.inputs)
-                {
-                    let val = node.inputs[inputKey];
-                    if (!Array.isArray(val) || val.length !== 2) continue;
-                    let connectedId = String(val[0]);
-                    if (!negativeNodeIds.has(connectedId))
-                    {
-                        negativeNodeIds.add(connectedId);
-                        changed = true;
-                    }
-                }
-            }
-        }
-
-        // ── Step 2: inject prompt and model ──────────────────────────────────
-
-        for (let nodeId in workflow)
-        {
-            let node = workflow[nodeId];
-            if (!node.inputs) continue;
-
-            if (node.class_type === "CLIPTextEncode" && typeof node.inputs.text === "string")
-            {
-                let isNegative = negativeNodeIds.has(nodeId);
-
-                // Fallback keyword check for workflows without standard sampler connections
-                if (!isNegative)
-                {
-                    let t = node.inputs.text.toLowerCase();
-                    isNegative =
-                        t.includes("worst quality") || t.includes("worst_quality") ||
-                        t.includes("bad quality")   || t.includes("bad_quality") ||
-                        t.includes("score_4")       || t.includes("score_5") ||
-                        node.inputs._negative === true;
-                }
-
-                if (!isNegative) node.inputs.text = prompt;
-            }
-
-            if (modelOverride && node.class_type === "CheckpointLoaderSimple")
-            {
-                node.inputs.ckpt_name = modelOverride;
-            }
-
-            // Inject seed into sampler nodes
-            if (seedMode === "random" || seedMode === "static")
-            {
-                let samplerSeedInputs = ["seed", "noise_seed"];
-                let isSampler = [
-                    "KSampler", "KSamplerAdvanced", "SamplerCustom",
-                    "Seed (rgthree)", "easy int"
-                ].includes(node.class_type);
-
-                if (isSampler)
-                {
-                    for (let seedKey of samplerSeedInputs)
-                    {
-                        if (typeof node.inputs[seedKey] === "number")
-                        {
-                            // staticSeed is pre-generated once per click and passed in
-                            node.inputs[seedKey] = staticSeed !== null ? staticSeed : Math.floor(Math.random() * 2147483647);
-                        }
-                    }
-                }
-            }
-        }
-
-        let payload = { prompt: workflow };
-
-        // Only attach source metadata when we actually resolved an id —
-        // never inject a null/empty civitai_image_id.
-        if (imageId)
-        {
-            payload.extra_data = { extra_pnginfo: { civitai_image_id: imageId } };
-        }
-
-        return payload;
-    }
+    // filterBannedTags() and buildPayload() now live in shared.js so the
+    // native context-menu flow in background.js can reuse them verbatim.
 
     async function sendToComfyUI(prompt, btn, imageId)
     {
@@ -1011,7 +895,29 @@
                 trigger.appendChild(trigSpan);
                 trigger.appendChild(arrow);
 
-                // Click trigger — behaviour depends on configured pairMode
+                // Shared by the trigger row itself and the dedicated menu
+                // item below — sends according to the configured pairMode
+                // (random: one random pick, sequential: next in rotation,
+                // static/all: every workflow in the tag).
+                async function sendTagByMode(tp, tl, cfg)
+                {
+                    let mode = cfg.pairMode || "static";
+                    startNewBatch();
+
+                    // resolveTagPairs() (shared.js) does the actual random /
+                    // sequential-with-randomized-start / all resolution —
+                    // same logic the native right-click menu uses.
+                    let picks = await resolveTagPairs(tl, tp, mode);
+                    if (picks.length === 0) return;
+
+                    browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: mode === "static" ? "all" : mode } });
+                    for (let p of picks) { sendWithSpecificPair(prompt, p, btn, imageId); }
+                }
+
+                // Click trigger — behaviour depends on configured pairMode.
+                // Kept for convenience, but hovering the arrow to open the
+                // submenu can make a clean click on the row itself fiddly —
+                // see the dedicated "Per workflow settings" item below.
                 trigger.addEventListener("mousedown", (function (tp, tl)
                 {
                     return function (ev)
@@ -1020,35 +926,8 @@
                         ev.stopPropagation();
                         browser.storage.local.get(["pairMode", "tagSequentialIndex"]).then(function (cfg)
                         {
-                            let mode = cfg.pairMode || "static";
                             removeContextMenu();
-                            startNewBatch();
-                            if (mode === "all")
-                            {
-                                browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
-                                for (let p of tp) { sendWithSpecificPair(prompt, p, btn, imageId); }
-                            }
-                            else if (mode === "random")
-                            {
-                                let pick = tp[Math.floor(Math.random() * tp.length)];
-                                browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "random" } });
-                                sendWithSpecificPair(prompt, pick, btn, imageId);
-                            }
-                            else if (mode === "sequential")
-                            {
-                                let tagIndexMap = cfg.tagSequentialIndex || {};
-                                let idx = (tagIndexMap[tl] || 0) % tp.length;
-                                browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "sequential" } });
-                                sendWithSpecificPair(prompt, tp[idx], btn, imageId);
-                                tagIndexMap[tl] = (idx + 1) % tp.length;
-                                browser.storage.local.set({ tagSequentialIndex: tagIndexMap });
-                            }
-                            else
-                            {
-                                // Static: send all for this tag
-                                browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
-                                for (let p of tp) { sendWithSpecificPair(prompt, p, btn, imageId); }
-                            }
+                            sendTagByMode(tp, tl, cfg);
                         });
                     };
                 })(tagPairs, tagLabel));
@@ -1062,6 +941,13 @@
                     browser.storage.local.set({ lastSentIntent: { type: "tag", tag: tl, mode: "all" } });
                     for (let p of tp) { sendWithSpecificPair(prompt, p, btn, imageId); }
                 }; })(tagPairs, tagLabel)));
+
+                // Dedicated, always-clickable equivalent of the trigger-row
+                // gesture — only shown when it would behave differently
+                // from "All <tag>" above (random/sequential modes).
+                let smartItemSlot = document.createElement("div");
+                sub.appendChild(smartItemSlot);
+
                 sub.appendChild(makeDivider());
                 for (let p of tagPairs)
                 {
@@ -1126,7 +1012,7 @@
                     showSub();
                 });
 
-                browser.storage.local.get(["pairMode"]).then(function (cfg)
+                browser.storage.local.get(["pairMode"]).then((function (tp, tl) { return function (cfg)
                 {
                     let mode = cfg.pairMode || "static";
                     if (mode === "sequential")
@@ -1135,7 +1021,28 @@
                         trigger.title = "Click to send a random workflow from this tag";
                     else
                         trigger.title = "Click to send all workflows in this tag";
-                });
+
+                    // Only add a dedicated item when it behaves differently
+                    // from "All <tag>" — for static/all modes they're identical.
+                    if (mode === "random" || mode === "sequential")
+                    {
+                        let label = mode === "random" ? "Random from " + tl : "Next in rotation";
+                        let item = makeItem(label, true, function ()
+                        {
+                            // Fresh read (not the mode snapshot from menu build time) so
+                            // sequential rotation doesn't go stale across menu opens.
+                            browser.storage.local.get(["pairMode", "tagSequentialIndex"]).then(function (freshCfg)
+                            {
+                                sendTagByMode(tp, tl, freshCfg);
+                            });
+                        });
+                        smartItemSlot.replaceWith(item);
+                    }
+                    else
+                    {
+                        smartItemSlot.remove();
+                    }
+                }; })(tagPairs, tagLabel));
 
                 group.appendChild(trigger);
                 return group;
@@ -1376,21 +1283,21 @@
             btn.style.opacity = "0.7";
         });
 
-        btn.addEventListener("contextmenu", function (e)
+        btn.addEventListener("contextmenu", async function (e)
         {
             e.preventDefault();
             e.stopPropagation();
-            let prompt = extractPromptFromPanel(panel);
+            let prompt = extractPromptFromPanel(panel) || await tryFallbackPrompt(panel);
             if (!prompt) { showToast("⚠️ Could not find prompt text."); return; }
             showWorkflowContextMenu(e, prompt, btn, resolveImageId());
         }, true);
 
-        btn.addEventListener("click", function (e)
+        btn.addEventListener("click", async function (e)
         {
             e.preventDefault();
             e.stopPropagation();
 
-            let prompt = extractPromptFromPanel(panel);
+            let prompt = extractPromptFromPanel(panel) || await tryFallbackPrompt(panel);
 
             if (!prompt)
             {
@@ -1447,10 +1354,10 @@
         let copyBtn = findFirstPromptCopyBtn(panel);
         if (!copyBtn) return;
 
-        // Only inject if there is actual prompt text to send
-        let promptCheck = extractPromptFromPanel(panel);
-        if (!promptCheck) return;
-
+        // Presence of a "Prompt" header + copy icon is enough to inject the
+        // button — the actual text is resolved (DOM, then embedded-metadata
+        // fallback) lazily at click time, since the DOM text can be blank
+        // while the source image still carries the prompt.
         let comfyBtn = createComfyButton(panel);
         copyBtn.parentElement.insertBefore(comfyBtn, copyBtn);
 
@@ -1520,9 +1427,8 @@
             let card = p.closest(".mantine-Card-root, .rounded-xl, [class*='Card']");
             if (!card) card = headerRow.parentElement;
 
-            let promptText = extractPromptFromPanel(card);
-            if (!promptText) continue;
-
+            // Text is resolved lazily at click time (DOM, then fallback) —
+            // see injectIntoPanel for why we no longer gate on it here.
             let comfyBtn = createComfyButton(card);
             btnGroup.insertBefore(comfyBtn, firstCopyBtn);
         }

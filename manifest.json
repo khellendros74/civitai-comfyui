@@ -1,13 +1,16 @@
 {
   "manifest_version": 2,
   "name": "CivitAI \u2192 ComfyUI",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Send CivitAI image prompts directly to your ComfyUI instance.",
   "permissions": [
     "storage",
     "activeTab",
+    "contextMenus",
     "*://civitai.com/*",
-    "*://civitai.red/*"
+    "*://civitai.red/*",
+    "*://image.civitai.com/*",
+    "*://image-b2.civitai.com/*"
   ],
   "content_scripts": [
     {
@@ -26,6 +29,7 @@
         "*://civitai.red/collections/*"
       ],
       "js": [
+        "shared.js",
         "content.js"
       ],
       "run_at": "document_idle"
@@ -64,6 +68,7 @@
   },
   "background": {
     "scripts": [
+      "shared.js",
       "background.js"
     ],
     "persistent": false
