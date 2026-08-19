@@ -21,6 +21,7 @@ jobs:
             manifest.json \
             background.js \
             content.js \
+            shared.js \
             options.html \
             options.js \
             popup.html \
