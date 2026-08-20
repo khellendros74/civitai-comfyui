@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.4.0**
+Current: **v1.4.1**
+
+### v1.4.1
+- Fixed a wildcard banned-tag bug: a rule like `ears *` (space before the `*`) baked that trailing space into the match, so it silently never matched a tag ending exactly in "ears" (e.g. "long pointy ears"). The wildcard base is now re-trimmed after stripping the `*`, so it matches regardless of a stray space.
 
 ### v1.4.0
 - Added a native right-click ("Send prompt to ComfyUI" / "Send with workflow") menu on CivitAI's `/images` feed, since it no longer exposes a per-card generation-data panel for the button to attach to. It reads the prompt straight from the image file's embedded metadata (EXIF/PNG text — CivitAI's own JSON, native ComfyUI PNG graphs, or A1111-style text), so it works with no dependency on CivitAI's page markup.

@@ -527,7 +527,10 @@ function filterBannedTags(prompt, bannedRaw)
         for (let rule of rules)
         {
             let isWildcard = rule.charAt(rule.length - 1) === "*";
-            let base = isWildcard ? rule.slice(0, -1).toLowerCase() : rule.toLowerCase();
+            // Re-trim after stripping the "*" — "ears *" (space before the
+            // star) would otherwise leave a trailing space baked into base,
+            // which silently never matches a tag ending in "ears" exactly.
+            let base = isWildcard ? rule.slice(0, -1).trim().toLowerCase() : rule.toLowerCase();
             if (isWildcard)
             {
                 // Remove any tag containing the base string
