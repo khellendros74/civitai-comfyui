@@ -13,6 +13,7 @@
     let serverAvailable  = null;
     let configMissing    = false;
     let selectionMissing = false;
+    let replayDescription = "will send: Default";
 
     function checkConfig()
     {
@@ -27,6 +28,39 @@
             configMissing    = missing;
             selectionMissing = noSel;
             if (changed) updateAllButtonStates();
+        });
+    }
+
+    // Builds a human-readable description of what the amber (replay) button
+    // will actually fire, mirroring sendToComfyUI()'s own "nothing selected"
+    // resolution — without mutating any rotation/randomization state, since
+    // this only runs to describe, never to send.
+    function computeReplayDescription()
+    {
+        browser.storage.local.get(["pairs", "lastSentIntent"]).then(function (s)
+        {
+            let pairs = s.pairs || [];
+            let info  = resolveReplayInfo(pairs, s.lastSentIntent);
+
+            if (info.kind === "named")
+                replayDescription = "will send: " + info.names.join(", ");
+            else if (info.kind === "all")
+                replayDescription = "will send all " + info.count + " workflow(s)";
+            else if (info.kind === "tag")
+            {
+                if (info.mode === "random")
+                    replayDescription = "will send a random workflow from \"" + info.tag + "\"";
+                else if (info.mode === "sequential")
+                    replayDescription = "will send the next workflow in rotation from \"" + info.tag + "\"";
+                else
+                    replayDescription = "will send all workflows tagged \"" + info.tag + "\" (" + info.count + ")";
+            }
+            else
+            {
+                replayDescription = "will send: Default";
+            }
+
+            updateAllButtonStates();
         });
     }
 
@@ -77,7 +111,7 @@
         else if (selectionMissing)
         {
             btn.disabled      = false;
-            btn.title         = "No workflow selected — will replay last sent or use Default";
+            btn.title         = "No workflow selected — " + replayDescription;
             btn.style.opacity = "0.85";
             btn.style.filter  = "sepia(1) saturate(4) hue-rotate(5deg)";
             btn.style.cursor  = "pointer";
@@ -93,8 +127,19 @@
     }
 
     checkConfig();
+    computeReplayDescription();
     checkServerAvailability();
     setInterval(checkServerAvailability, 30000);
+
+    // Keep amber-state config and the replay tooltip fresh without needing
+    // a page reload — e.g. after picking a new workflow from the context
+    // menu in another tab, or editing pairs in the options page.
+    browser.storage.onChanged.addListener(function (changes, area)
+    {
+        if (area !== "local") return;
+        if (changes.selectedPairs || changes.pairs) checkConfig();
+        if (changes.pairs || changes.lastSentIntent || changes.selectedPairs) computeReplayDescription();
+    });
 
     // Lets background.js (native right-click menu path) reuse the toast UI.
     browser.runtime.onMessage.addListener(function (message)

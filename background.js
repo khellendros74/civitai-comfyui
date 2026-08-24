@@ -115,6 +115,43 @@ browser.storage.onChanged.addListener(function (changes)
     if (changes.pairs || changes.pairMode) rebuildContextMenus();
 });
 
+// Updates the top-level "Send prompt to ComfyUI" title right before the
+// native menu opens, so it reflects the actual replay target (e.g. "Next in
+// rotation") whenever nothing is explicitly selected in the options page.
+browser.contextMenus.onShown.addListener(function (info)
+{
+    if (!info.menuIds || info.menuIds.indexOf("civitai-comfyui-send-default") === -1) return;
+
+    browser.storage.local.get(["pairs", "selectedPairs", "lastSentIntent"]).then(function (s)
+    {
+        let pairs        = s.pairs || [];
+        let hasSelection = s.selectedPairs && s.selectedPairs.length > 0;
+        let title = "Send prompt to ComfyUI";
+
+        if (pairs.length > 0 && !hasSelection)
+        {
+            let replay = resolveReplayInfo(pairs, s.lastSentIntent);
+            let label  = null;
+
+            if (replay.kind === "named")      label = replay.names.join(", ");
+            else if (replay.kind === "all")   label = "All workflows";
+            else if (replay.kind === "tag")
+            {
+                if (replay.mode === "random")         label = "Random (" + replay.tag + ")";
+                else if (replay.mode === "sequential") label = "Next in rotation";
+                else                                    label = "All \"" + replay.tag + "\"";
+            }
+
+            if (label) title = label;
+        }
+
+        browser.contextMenus.update("civitai-comfyui-send-default", { title: title }).then(function ()
+        {
+            browser.contextMenus.refresh();
+        });
+    });
+});
+
 // extractPromptFromImageBuffer(), buildPayload() and filterBannedTags() are
 // defined in shared.js (loaded before this script — see manifest.json).
 

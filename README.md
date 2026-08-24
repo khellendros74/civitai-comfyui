@@ -88,7 +88,15 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.4.1**
+Current: **v1.5.0**
+
+### v1.5.0
+- Export/import now also carries seed mode, model mode, selected models, and static model — including in the auto-backup file written before an import. Restoring a config with a non-default model mode re-fetches the checkpoint list from the currently configured server so the restored selection renders correctly.
+- Content script (and its toast/replay logic) now runs on all of `civitai.com`/`civitai.red`, not just `/images`, `/posts`, and `/collections` — fixes the native right-click "Send to ComfyUI" menu not showing a confirmation toast on pages outside that narrower set (e.g. model pages, the plain feed).
+- Banned tags now support a `*` anywhere in a rule, not just trailing (e.g. `point*ears*`), matched as a substring pattern.
+- Saving a workflow (Settings or a named pair) now validates the JSON and warns — with a chance to cancel — if no `CLIPTextEncode` or `CheckpointLoaderSimple` node is found.
+- Added a duplicate button next to delete in the saved workflow list, cloning a pair under an auto-numbered "name copy" / "name copy 2" name.
+- The amber (replay) button's tooltip, and the native right-click menu's top-level item, now show what will actually fire (e.g. "Next in rotation", a pair name, or "All workflows") instead of a generic replay message — refreshed live via storage change events.
 
 ### v1.4.1
 - Fixed a wildcard banned-tag bug: a rule like `ears *` (space before the `*`) baked that trailing space into the match, so it silently never matched a tag ending exactly in "ears" (e.g. "long pointy ears"). The wildcard base is now re-trimmed after stripping the `*`, so it matches regardless of a stray space.

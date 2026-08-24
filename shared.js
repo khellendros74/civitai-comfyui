@@ -509,7 +509,44 @@ async function resolveTagPairs(tag, pairs, mode)
     return tagPool; // static / all
 }
 
+// Describes what a "nothing explicit selected" send would actually resolve
+// to, WITHOUT mutating any rotation/randomization state — used to preview
+// the replay action (button tooltip, native menu title) rather than perform
+// it. Kept in sync with the real resolution in sendToComfyUI()/resolveDefaultPairs().
+function resolveReplayInfo(pairs, intent)
+{
+    if (!intent) return { kind: "default" };
+
+    if (intent.type === "named")
+    {
+        let names = (intent.names || []).filter(function (n) { return pairs.some(function (p) { return p.name === n; }); });
+        if (names.length === 0) return { kind: "default" };
+        return { kind: "named", names: names };
+    }
+
+    if (intent.type === "all")
+    {
+        return { kind: "all", count: pairs.length };
+    }
+
+    if (intent.type === "tag")
+    {
+        let tagPool = pairs.filter(function (p) { return pairHasTag(p, intent.tag); });
+        if (tagPool.length === 0) return { kind: "default" };
+        return { kind: "tag", tag: intent.tag, mode: intent.mode, count: tagPool.length };
+    }
+
+    return { kind: "default" };
+}
+
 // ── Banned tag filtering ──────────────────────────────────────────────────────
+
+// Escapes regex metacharacters in a literal segment (used when building a
+// wildcard-rule pattern below).
+function escapeRegexLiteral(str)
+{
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function filterBannedTags(prompt, bannedRaw)
 {
@@ -526,20 +563,24 @@ function filterBannedTags(prompt, bannedRaw)
         let trimmed = tag.trim().toLowerCase();
         for (let rule of rules)
         {
-            let isWildcard = rule.charAt(rule.length - 1) === "*";
-            // Re-trim after stripping the "*" — "ears *" (space before the
-            // star) would otherwise leave a trailing space baked into base,
-            // which silently never matches a tag ending in "ears" exactly.
-            let base = isWildcard ? rule.slice(0, -1).trim().toLowerCase() : rule.toLowerCase();
+            let ruleLower = rule.toLowerCase();
+            let isWildcard = ruleLower.indexOf("*") !== -1;
             if (isWildcard)
             {
-                // Remove any tag containing the base string
-                if (trimmed.indexOf(base) !== -1) return false;
+                // "*" can appear anywhere (leading, trailing, or mid-string,
+                // e.g. "point*ears*") — split on it, escape each literal
+                // segment, then join with ".*" so any run of characters can
+                // sit between segments. Trimming each segment avoids a
+                // stray space next to a "*" (e.g. "ears *") silently baking
+                // a literal trailing space into the pattern.
+                let segments = ruleLower.split("*").map(function (s) { return escapeRegexLiteral(s.trim()); });
+                let pattern  = segments.join(".*");
+                if (new RegExp(pattern).test(trimmed)) return false;
             }
             else
             {
                 // Exact match only
-                if (trimmed === base) return false;
+                if (trimmed === ruleLower) return false;
             }
         }
         return true;

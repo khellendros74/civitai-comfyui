@@ -268,9 +268,28 @@
 
                 if (!pair.isDefault)
                 {
+                    let actions = document.createElement("span");
+                    actions.style.cssText = "display:flex;gap:2px;margin-left:auto;flex-shrink:0;";
+
+                    let dupBtn = document.createElement("button");
+                    dupBtn.textContent = "⧉";
+                    dupBtn.title = "Duplicate";
+                    dupBtn.style.cssText = "background:transparent;border:none;color:#374151;font-size:12px;padding:2px 6px;cursor:pointer;flex-shrink:0;border-radius:4px;line-height:1;";
+                    dupBtn.addEventListener("mouseenter", function () { dupBtn.style.color = "#a5b4fc"; });
+                    dupBtn.addEventListener("mouseleave", function () { dupBtn.style.color = "#374151"; });
+                    dupBtn.addEventListener("click", (function (p)
+                    {
+                        return function (e)
+                        {
+                            e.stopPropagation();
+                            clonePair(p.name);
+                        };
+                    })(pair));
+
                     let delBtn = document.createElement("button");
                     delBtn.textContent = "✕";
-                    delBtn.style.cssText = "background:transparent;border:none;color:#374151;font-size:12px;padding:2px 6px;cursor:pointer;flex-shrink:0;border-radius:4px;line-height:1;margin-left:auto;";
+                    delBtn.title = "Delete";
+                    delBtn.style.cssText = "background:transparent;border:none;color:#374151;font-size:12px;padding:2px 6px;cursor:pointer;flex-shrink:0;border-radius:4px;line-height:1;";
                     delBtn.addEventListener("mouseenter", function () { delBtn.style.color = "#f87171"; });
                     delBtn.addEventListener("mouseleave", function () { delBtn.style.color = "#374151"; });
                     delBtn.addEventListener("click", (function (p)
@@ -281,7 +300,10 @@
                             deletePair(p.name);
                         };
                     })(pair));
-                    row.appendChild(delBtn);
+
+                    actions.appendChild(dupBtn);
+                    actions.appendChild(delBtn);
+                    row.appendChild(actions);
                 }
 
                 // Clicking the row: toggle input then load
@@ -346,6 +368,34 @@
         });
     }
 
+    function clonePair(name)
+    {
+        browser.storage.local.get(["pairs"]).then(function (s)
+        {
+            let pairs    = s.pairs || [];
+            let original = pairs.find(function (p) { return p.name === name; });
+            if (!original) return;
+
+            let baseName = original.name + " copy";
+            let newName  = baseName;
+            let n = 2;
+            while (pairs.some(function (p) { return p.name === newName; }))
+            {
+                newName = baseName + " " + n;
+                n++;
+            }
+
+            let clone = Object.assign({}, original, { name: newName, isDefault: false, savedAt: Date.now() });
+            pairs.push(clone);
+
+            browser.storage.local.set({ pairs }).then(function ()
+            {
+                renderPairList(getPairMode());
+                showStatus("Duplicated as \"" + newName + "\"", false);
+            });
+        });
+    }
+
     // ── Save pair ──────────────────────────────────────────────────────────────
 
     savePairBtn.addEventListener("click", function ()
@@ -357,6 +407,7 @@
         if (!name)              { showStatus("Enter a name for this workflow.", true); return; }
         if (name === "Default") { showStatus("'Default' is a reserved name — choose a different name.", true); return; }
         if (!wf)                { showStatus("Paste a workflow before saving.", true); return; }
+        if (!confirmWorkflowIsSaveable(wf)) return;
 
         let tags = pairTagsInput ? pairTagsInput.value.trim() : "";
         let bannedTags = pairBannedTagsInput ? pairBannedTagsInput.value.trim() : "";
@@ -712,8 +763,7 @@
 
         if (!url) { showStatus("Please enter your ComfyUI URL.", true); return; }
 
-        let wfError = validateWorkflow(wf);
-        if (wfError) { showStatus(wfError, true); return; }
+        if (!confirmWorkflowIsSaveable(wf)) return;
 
         let selectedModels = [], staticModel = "";
         if (mode === "random")
@@ -787,7 +837,7 @@
 
     document.getElementById("exportBtn").addEventListener("click", function ()
     {
-        browser.storage.local.get(["pairs", "globalBannedTags"]).then(function (s)
+        browser.storage.local.get(["pairs", "globalBannedTags", "seedMode", "modelMode", "selectedModels", "staticModel"]).then(function (s)
         {
             let pairs = (s.pairs || []).filter(function (p) { return !p.isDefault; });
             if (pairs.length === 0)
@@ -801,7 +851,15 @@
                 String(now.getDate()).padStart(2, "0") + "_" +
                 String(now.getHours()).padStart(2, "0") +
                 String(now.getMinutes()).padStart(2, "0");
-            let exportData = { globalBannedTags: s.globalBannedTags || "", pairs: pairs };
+            let exportData =
+            {
+                globalBannedTags: s.globalBannedTags || "",
+                seedMode: s.seedMode || "workflow",
+                modelMode: s.modelMode || "default",
+                selectedModels: s.selectedModels || [],
+                staticModel: s.staticModel || "",
+                pairs: pairs
+            };
             let json = JSON.stringify(exportData, null, 2);
             let blob = new Blob([json], { type: "application/json" });
             let url  = URL.createObjectURL(blob);
@@ -816,11 +874,20 @@
 
     // ── Import workflows ───────────────────────────────────────────────────────
 
-    function downloadPairsAsJson(pairs, globalBannedTags, filename)
+    function downloadPairsAsJson(pairs, globalBannedTags, filename, extra)
     {
         let custom = pairs.filter(function (p) { return !p.isDefault; });
         if (custom.length === 0) return;
-        let exportData = { globalBannedTags: globalBannedTags || "", pairs: custom };
+        extra = extra || {};
+        let exportData =
+        {
+            globalBannedTags: globalBannedTags || "",
+            seedMode: extra.seedMode || "workflow",
+            modelMode: extra.modelMode || "default",
+            selectedModels: extra.selectedModels || [],
+            staticModel: extra.staticModel || "",
+            pairs: custom
+        };
         let blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
         let url  = URL.createObjectURL(blob);
         let a    = document.createElement("a");
@@ -850,6 +917,10 @@
 
                 // Support both old format (plain array) and new format ({ globalBannedTags, pairs })
                 let importedGlobalBannedTags = null;
+                let importedSeedMode    = null;
+                let importedModelMode   = null;
+                let importedSelectedModels = null;
+                let importedStaticModel = null;
                 if (Array.isArray(imported))
                 {
                     // old format
@@ -857,6 +928,10 @@
                 else if (imported && Array.isArray(imported.pairs))
                 {
                     importedGlobalBannedTags = imported.globalBannedTags || "";
+                    if (typeof imported.seedMode === "string") importedSeedMode = imported.seedMode;
+                    if (typeof imported.modelMode === "string") importedModelMode = imported.modelMode;
+                    if (Array.isArray(imported.selectedModels)) importedSelectedModels = imported.selectedModels;
+                    if (typeof imported.staticModel === "string") importedStaticModel = imported.staticModel;
                     imported = imported.pairs;
                 }
                 else
@@ -867,7 +942,7 @@
                 let valid = imported.filter(function (p) { return p.name && p.workflow; });
                 if (valid.length === 0) { statusEl.textContent = "No valid workflows found in file."; return; }
 
-                browser.storage.local.get(["pairs", "globalBannedTags"]).then(function (s)
+                browser.storage.local.get(["pairs", "globalBannedTags", "seedMode", "modelMode", "selectedModels", "staticModel"]).then(function (s)
                 {
                     let existing = s.pairs || [];
                     let customExisting = existing.filter(function (p) { return !p.isDefault; });
@@ -894,7 +969,8 @@
                         String(now.getDate()).padStart(2, "0") + "_" +
                         String(now.getHours()).padStart(2, "0") +
                         String(now.getMinutes()).padStart(2, "0");
-                    downloadPairsAsJson(existing, s.globalBannedTags || "", "civitai-comfyui-backup-" + stamp + ".json");
+                    downloadPairsAsJson(existing, s.globalBannedTags || "", "civitai-comfyui-backup-" + stamp + ".json",
+                        { seedMode: s.seedMode, modelMode: s.modelMode, selectedModels: s.selectedModels, staticModel: s.staticModel });
 
                     // Replace: overwrite matching names, keep non-matching existing ones
                     let merged = customExisting.filter(function (p)
@@ -915,14 +991,43 @@
                         saveData.globalBannedTags = importedGlobalBannedTags;
                         globalBannedTagsInput.value = importedGlobalBannedTags;
                     }
+                    let restoredConfig = false;
+                    if (importedSeedMode !== null)
+                    {
+                        saveData.seedMode = importedSeedMode;
+                        for (let rb of seedRadios) { rb.checked = (rb.value === importedSeedMode); }
+                        restoredConfig = true;
+                    }
+                    if (importedModelMode !== null)
+                    {
+                        saveData.modelMode = importedModelMode;
+                        for (let rb of document.querySelectorAll("input[name='modelMode']")) { rb.checked = (rb.value === importedModelMode); }
+                        restoredConfig = true;
+                    }
+                    if (importedSelectedModels !== null) { saveData.selectedModels = importedSelectedModels; restoredConfig = true; }
+                    if (importedStaticModel !== null)    { saveData.staticModel    = importedStaticModel;    restoredConfig = true; }
+
                     browser.storage.local.set(saveData).then(function ()
                     {
                         let detail = added > 0 && replaced > 0
                             ? added + " added, " + replaced + " replaced"
                             : added > 0 ? added + " added" : replaced + " replaced";
                         let extra = importedGlobalBannedTags !== null ? " Global banned tags restored." : "";
+                        if (restoredConfig) extra += " Seed/model config restored.";
                         statusEl.textContent = "✅ Import done (" + detail + "). Backup downloaded." + extra;
                         renderPairList(getPairMode());
+                        updatePickerUI();
+                        if (importedModelMode !== null && importedModelMode !== "default")
+                        {
+                            let url = urlInput.value.trim().replace(/\/$/, "");
+                            if (url)
+                            {
+                                fetch(url + "/models/checkpoints")
+                                .then(function (res) { return res.json(); })
+                                .then(function (data) { if (Array.isArray(data) && data.length > 0) { cachedModels = data.sort(); renderModelList(importedModelMode); } })
+                                .catch(function () {});
+                            }
+                        }
                     });
                 });
             }
@@ -992,6 +1097,46 @@
         if (!raw || raw.trim() === "") return "Workflow JSON is empty.";
         try { let p = JSON.parse(raw); if (typeof p !== "object" || Array.isArray(p)) return "Workflow must be a JSON object."; return null; }
         catch (e) { return "Invalid JSON: " + e.message; }
+    }
+
+    // Soft checks — a workflow missing these will still be accepted after
+    // confirmation, since a valid ComfyUI graph could legitimately omit one
+    // (e.g. a checkpoint loaded via a different node type).
+    function getWorkflowWarnings(raw)
+    {
+        let warnings = [];
+        try
+        {
+            let wf = JSON.parse(raw);
+            let hasClipTextEncode = false;
+            let hasCheckpointLoader = false;
+            for (let nodeId in wf)
+            {
+                let node = wf[nodeId];
+                if (!node || typeof node !== "object") continue;
+                if (node.class_type === "CLIPTextEncode") hasClipTextEncode = true;
+                if (node.class_type === "CheckpointLoaderSimple") hasCheckpointLoader = true;
+            }
+            if (!hasClipTextEncode)   warnings.push("No CLIPTextEncode node found — the CivitAI prompt won't be injected anywhere.");
+            if (!hasCheckpointLoader) warnings.push("No CheckpointLoaderSimple node found — model override (if enabled) won't apply.");
+        }
+        catch (e) { /* JSON errors are already caught by validateWorkflow */ }
+        return warnings;
+    }
+
+    // Runs both checks; returns false (and shows/asks the appropriate
+    // message) when the save should be aborted.
+    function confirmWorkflowIsSaveable(raw)
+    {
+        let wfError = validateWorkflow(raw);
+        if (wfError) { showStatus(wfError, true); return false; }
+
+        let warnings = getWorkflowWarnings(raw);
+        if (warnings.length > 0)
+        {
+            return confirm("Workflow warning:\n\n- " + warnings.join("\n- ") + "\n\nSave anyway?");
+        }
+        return true;
     }
 
 })();
