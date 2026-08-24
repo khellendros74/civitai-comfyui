@@ -439,7 +439,7 @@ async function handleNativeSend(info, tabId)
 
     let settings = await browser.storage.local.get([
         "comfyUrl", "globalBannedTags", "promptSuffix", "workflow",
-        "modelMode", "selectedModels", "staticModel", "seedMode", "pairs",
+        "modelMode", "selectedModels", "staticModel", "seedMode", "samplerMode", "pairs",
         "pairMode", "selectedPairs", "staticPair", "sequentialIndex",
         "sequentialStarted", "tagSequentialIndex", "lastSentIntent"
     ]);
@@ -519,10 +519,15 @@ async function handleNativeSend(info, tabId)
         sharedSeed = promptData.seed;
     }
 
-    let samplerOverrides = {
+    // Only adopt the source image's own sampler/scheduler/steps/cfg when the
+    // user explicitly opted in — default ("workflow") always keeps whatever
+    // the saved workflow's KSampler is set to, same as before native-menu
+    // metadata extraction existed.
+    let samplerMode = settings.samplerMode || "workflow";
+    let samplerOverrides = (samplerMode === "source") ? {
         steps: promptData.steps, cfg: promptData.cfg,
         samplerName: promptData.sampler, scheduler: promptData.scheduler
-    };
+    } : null;
 
     currentBatchIds = [];
     let sent = 0, failed = 0;

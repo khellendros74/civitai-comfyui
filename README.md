@@ -88,7 +88,11 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.5.0**
+Current: **v1.5.1**
+
+### v1.5.1
+- Fixed the native right-click send unconditionally overwriting the workflow's own sampler/scheduler/steps/CFG with whatever the source CivitAI image was made with — a saved workflow set to `euler_ancestral` could silently get sent as `dpmpp_2m` if the source image used DPM++ 2M. Added a Sampler setting (Workflow / Source image) so this is opt-in; default keeps the workflow's own values.
+- `Schedule type:` (CivitAI's newer format, separate from `Sampler:`) is now parsed and mapped — previously ignored, so scheduler overrides only ever worked off the old combined "DPM++ 2M Karras"-style labels.
 
 ### v1.5.0
 - Export/import now also carries seed mode, model mode, selected models, and static model — including in the auto-backup file written before an import. Restoring a config with a non-default model mode re-fetches the checkpoint list from the currently configured server so the restored selection renders correctly.

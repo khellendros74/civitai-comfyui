@@ -296,7 +296,7 @@
         <h1>
             <div style="white-space:nowrap;">
                 <a href="https://addons.mozilla.org/en-US/firefox/addon/civitai-comfyui/" target="_blank" style="color:inherit;text-decoration:none;" title="View on Mozilla Add-ons">CivitAI <span>→</span> ComfyUI</a>
-                <sup style="font-size:11px;color:#64748b;font-weight:400;letter-spacing:0;">v1.5.0</sup>
+                <sup style="font-size:11px;color:#64748b;font-weight:400;letter-spacing:0;">v1.5.1</sup>
             </div>
             <p id="serverStatusBanner" style="display:none;font-size:12px;color:#64748b;margin:4px 0 0 0;"></p>
         </h1>
@@ -331,6 +331,20 @@
             <label class="radio-label">
                 <input type="radio" name="seedMode" value="static">
                 <span><strong>Static</strong> — one random seed generated per click, shared across all workflows</span>
+            </label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Sampler</h2>
+        <div class="radio-group">
+            <label class="radio-label">
+                <input type="radio" name="samplerMode" value="workflow" checked>
+                <span><strong>Workflow</strong> — always use the sampler, scheduler, steps and CFG defined in your workflow</span>
+            </label>
+            <label class="radio-label">
+                <input type="radio" name="samplerMode" value="source">
+                <span><strong>Source image</strong> — adopt the sampler, scheduler, steps and CFG from the CivitAI image (right-click send only)</span>
             </label>
         </div>
     </div>

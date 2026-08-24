@@ -13,6 +13,7 @@
     let statusEl       = document.getElementById("status");
     let loadModelsBtn  = document.getElementById("loadModelsBtn");
     let seedRadios     = document.querySelectorAll("input[name='seedMode']");
+    let samplerRadios  = document.querySelectorAll("input[name='samplerMode']");
     let pairModeRadios = document.querySelectorAll("input[name='pairMode']");
     let pairModeLabel  = document.getElementById("pairModeLabel");
     let pairModeHint   = document.getElementById("pairModeHint");
@@ -699,7 +700,7 @@
         if (changes.selectedPairs) updateLogoState(urlInput.value.trim(), null);
     });
 
-    browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair"]).then(function (s)
+    browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "samplerMode", "pairMode", "pairs", "selectedPairs", "staticPair"]).then(function (s)
     {
         let resolvedUrl = (s.comfyUrl && s.comfyUrl.trim()) ? s.comfyUrl : "http://localhost:8188";
         let resolvedWf  = (s.workflow  && s.workflow.trim())  ? s.workflow  : DEFAULT_WORKFLOW;
@@ -713,6 +714,9 @@
 
         let seedMode = s.seedMode || "workflow";
         for (let rb of seedRadios) { rb.checked = (rb.value === seedMode); }
+
+        let samplerMode = s.samplerMode || "workflow";
+        for (let rb of samplerRadios) { rb.checked = (rb.value === samplerMode); }
 
         let modelMode = s.modelMode || "default";
         for (let rb of document.querySelectorAll("input[name='modelMode']")) { rb.checked = (rb.value === modelMode); }
@@ -780,6 +784,9 @@
         let seedMode = "workflow";
         for (let rb of seedRadios) { if (rb.checked) { seedMode = rb.value; break; } }
 
+        let samplerMode = "workflow";
+        for (let rb of samplerRadios) { if (rb.checked) { samplerMode = rb.value; break; } }
+
         let pairMode = getPairMode();
         let selectedPairs = [], staticPair = "";
         if (pairMode === "static")
@@ -817,7 +824,7 @@
                 }
             }
 
-            browser.storage.local.set({ comfyUrl: url, globalBannedTags, promptSuffix: suffix, workflow: wf, modelMode: mode, selectedModels, staticModel, seedMode, pairMode, selectedPairs, staticPair, pairs, sequentialStarted: false })
+            browser.storage.local.set({ comfyUrl: url, globalBannedTags, promptSuffix: suffix, workflow: wf, modelMode: mode, selectedModels, staticModel, seedMode, samplerMode, pairMode, selectedPairs, staticPair, pairs, sequentialStarted: false })
             .then(function ()
             {
                 let msg = (loadedPairName && loadedPairName !== "Default")

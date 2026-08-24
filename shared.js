@@ -230,6 +230,28 @@ function mapSamplerLabel(label)
     return hit ? { sampler: hit[0], scheduler: hit[1] } : null;
 }
 
+// Newer CivitAI/A1111 metadata splits schedule out of the sampler label
+// entirely ("Sampler: DPM++ 2M, Schedule type: Karras" instead of the old
+// combined "DPM++ 2M Karras"). This field, when present, takes priority
+// over whatever scheduler a combined SAMPLER_LABEL_MAP entry would have
+// implied. "Automatic" means ComfyUI's own default — no override.
+let SCHEDULE_LABEL_MAP = {
+    "karras": "karras",
+    "exponential": "exponential",
+    "sgm uniform": "sgm_uniform",
+    "normal": "normal",
+    "simple": "simple",
+    "ddim uniform": "ddim_uniform",
+    "beta": "beta",
+    "kl optimal": "kl_optimal"
+};
+
+function mapScheduleLabel(label)
+{
+    if (!label) return null;
+    return SCHEDULE_LABEL_MAP[label.trim().toLowerCase()] || null;
+}
+
 // Pulls the A1111-style "Steps: N, Sampler: X, CFG scale: Y, Seed: Z,
 // Size: WxH, Clip skip: C" tail that both raw A1111 PNGs and CivitAI's own
 // on-site generator write after the negative prompt. Capped window since
@@ -242,6 +264,7 @@ function extractA1111Fields(text, fromIdx)
 
     if ((m = scope.match(/Steps:\s*(\d+)/))) fields.steps = parseInt(m[1], 10);
     if ((m = scope.match(/Sampler:\s*([^,\n]+)/))) fields.samplerLabel = m[1].trim();
+    if ((m = scope.match(/Schedule type:\s*([^,\n]+)/))) fields.scheduleType = m[1].trim();
     if ((m = scope.match(/CFG scale:\s*([\d.]+)/))) fields.cfg = parseFloat(m[1]);
     if ((m = scope.match(/Seed:\s*(\d+)/))) fields.seed = parseInt(m[1], 10);
     if ((m = scope.match(/Size:\s*(\d+)x(\d+)/))) { fields.width = parseInt(m[1], 10); fields.height = parseInt(m[2], 10); }
@@ -334,6 +357,7 @@ function tryExtractCivitaiMetadataLabel(text)
     // before it ("Steps: N, Sampler: X, ..., Seed: Z, ...").
     let a1111 = extractA1111Fields(text, Math.max(0, idx - 4000));
     let mapped = mapSamplerLabel(meta.sampler || a1111.samplerLabel);
+    let scheduleOverride = mapScheduleLabel(a1111.scheduleType);
 
     return {
         prompt: meta.prompt,
@@ -345,7 +369,7 @@ function tryExtractCivitaiMetadataLabel(text)
         width: a1111.width != null ? a1111.width : null,
         height: a1111.height != null ? a1111.height : null,
         sampler: mapped ? mapped.sampler : null,
-        scheduler: mapped ? mapped.scheduler : null,
+        scheduler: scheduleOverride || (mapped ? mapped.scheduler : null),
         checkpoint: null
     };
 }
@@ -410,6 +434,7 @@ function tryExtractA1111Parameters(text)
 
     let extra = extractA1111Fields(text, negIdx);
     let mapped = mapSamplerLabel(extra.samplerLabel);
+    let scheduleOverride = mapScheduleLabel(extra.scheduleType);
 
     return {
         prompt: positive,
@@ -421,7 +446,7 @@ function tryExtractA1111Parameters(text)
         width: extra.width != null ? extra.width : null,
         height: extra.height != null ? extra.height : null,
         sampler: mapped ? mapped.sampler : null,
-        scheduler: mapped ? mapped.scheduler : null,
+        scheduler: scheduleOverride || (mapped ? mapped.scheduler : null),
         checkpoint: null
     };
 }
