@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.5.3**
+Current: **v1.5.4**
+
+### v1.5.4
+- No functional changes — version-only bump used to confirm the loaded extension instance actually reflects the latest files on disk.
 
 ### v1.5.3
 - Added a search box above the saved-workflow list (always visible, including Static mode) to filter by name or tag — with a 140+ workflow library, scrolling to find one was no longer practical. Includes a clear (✕) button.
