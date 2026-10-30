@@ -13,6 +13,7 @@
     let statusEl       = document.getElementById("status");
     let loadModelsBtn  = document.getElementById("loadModelsBtn");
     let seedRadios     = document.querySelectorAll("input[name='seedMode']");
+    let suffixPositionRadios = document.querySelectorAll("input[name='suffixPosition']");
     let samplerRadios  = document.querySelectorAll("input[name='samplerMode']");
     let pairModeRadios = document.querySelectorAll("input[name='pairMode']");
     let pairModeLabel  = document.getElementById("pairModeLabel");
@@ -25,6 +26,18 @@
 
     let cachedModels = [];
     let pairSortOrder = "alpha"; // "alpha" | "date"
+    let pairSearchTerm = "";
+    let pairSearchFocused = false;
+    let pendingSelectedPairs = null;
+    let pendingStaticPair = null;
+
+    function captureCurrentSelection()
+    {
+        let checked = pairListEl.querySelectorAll("input[type='checkbox']:checked");
+        pendingSelectedPairs = Array.prototype.map.call(checked, function (cb) { return cb.value; });
+        let radio = pairListEl.querySelector("input[type='radio'][name='pairChoice']:checked");
+        pendingStaticPair = radio ? radio.value : null;
+    }
 
     const DEFAULT_WORKFLOW = '{"3":{"inputs":{"seed":685468484323813,"steps":20,"cfg":8,"sampler_name":"euler","scheduler":"normal","denoise":1,"model":["4",0],"positive":["6",0],"negative":["7",0],"latent_image":["5",0]},"class_type":"KSampler","_meta":{"title":"KSampler"}},"4":{"inputs":{"ckpt_name":"v1-5-pruned-emaonly-fp16.safetensors"},"class_type":"CheckpointLoaderSimple","_meta":{"title":"Load Checkpoint"}},"5":{"inputs":{"width":512,"height":512,"batch_size":1},"class_type":"EmptyLatentImage","_meta":{"title":"Empty Latent Image"}},"6":{"inputs":{"text":"beautiful scenery nature glass bottle landscape, purple galaxy bottle,","clip":["4",1]},"class_type":"CLIPTextEncode","_meta":{"title":"CLIP Text Encode (Prompt)"}},"7":{"inputs":{"text":"text, watermark","clip":["4",1]},"class_type":"CLIPTextEncode","_meta":{"title":"CLIP Text Encode (Prompt)"}},"8":{"inputs":{"samples":["3",0],"vae":["4",2]},"class_type":"VAEDecode","_meta":{"title":"VAE Decode"}},"9":{"inputs":{"filename_prefix":"ComfyUI","images":["8",0]},"class_type":"SaveImage","_meta":{"title":"Save Image"}}}';
 
@@ -60,6 +73,12 @@
     {
         for (let rb of pairModeRadios) { if (rb.checked) return rb.value; }
         return "static";
+    }
+
+    function getSuffixPosition()
+    {
+        for (let rb of suffixPositionRadios) { if (rb.checked) return rb.value; }
+        return "suffix";
     }
 
     // Sequential state: index persisted in storage
@@ -115,8 +134,10 @@
         browser.storage.local.get(["pairs", "selectedPairs", "staticPair"]).then(function (s)
         {
             let pairs         = s.pairs || [];
-            let selectedPairs = s.selectedPairs || [];
-            let staticPair    = s.staticPair || "";
+            let selectedPairs = pendingSelectedPairs !== null ? pendingSelectedPairs : (s.selectedPairs || []);
+            let staticPair    = pendingStaticPair    !== null ? pendingStaticPair    : (s.staticPair || "");
+            pendingSelectedPairs = null;
+            pendingStaticPair    = null;
 
             pairListEl.textContent = "";
 
@@ -148,6 +169,7 @@
                 btn.addEventListener("click", function ()
                 {
                     pairSortOrder = value;
+                    captureCurrentSelection();
                     renderPairList(getPairMode());
                 });
                 return btn;
@@ -157,6 +179,8 @@
             // Remove any previously injected sort buttons first
             let existingSortGroup = pairModeHint.querySelector(".pair-sort-group");
             if (existingSortGroup) existingSortGroup.remove();
+            let existingCountLabel = pairModeHint.querySelector(".pair-count-label");
+            if (existingCountLabel) existingCountLabel.remove();
             pairModeHint.style.cssText = "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;";
             let sortGroup = document.createElement("span");
             sortGroup.className = "pair-sort-group";
@@ -180,29 +204,84 @@
 
             let sorted = defaultEntry ? [defaultEntry].concat(custom) : custom;
 
+            let term = pairSearchTerm.trim().toLowerCase();
+            function pairMatches(p)
+            {
+                if (!term) return true;
+                let name = (p.name || "").toLowerCase();
+                let tags = (p.tags || "").toLowerCase();
+                return name.indexOf(term) !== -1 || tags.indexOf(term) !== -1;
+            }
+
             let container = document.createElement("div");
             container.className = "model-checkbox-list";
+
+            function visibleCheckboxes()
+            {
+                return Array.prototype.filter.call(container.querySelectorAll("input[type='checkbox']"), function (cb) { return cb.parentElement.style.display !== "none"; });
+            }
 
             function updateCountLabel()
             {
                 if (!countLabel) return;
-                let n = container.querySelectorAll("input[type='checkbox']:checked").length;
-                countLabel.textContent = n + " of " + sorted.length + " selected";
+                let cbs = container.querySelectorAll("input[type='checkbox']");
+                let n = 0;
+                for (let cb of cbs) { if (cb.checked) n++; }
+                countLabel.textContent = n + " of " + cbs.length + " selected";
             }
 
-            let controlsRow = null;
-            let countLabel  = null;
+            let searchRow = document.createElement("div");
+            searchRow.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+
+            let searchWrap = document.createElement("div");
+            searchWrap.style.cssText = "position:relative;flex:1;min-width:0;";
+
+            let searchInput = document.createElement("input");
+            searchInput.type = "text";
+            searchInput.placeholder = "Filter by name or tag\u2026";
+            searchInput.value = pairSearchTerm;
+            searchInput.style.cssText = "width:100%;box-sizing:border-box;background:#0f0f1a;border:1px solid #2d2b55;border-radius:6px;color:#e0e0ff;font-size:12px;padding:5px 26px 5px 10px;outline:none;";
+            searchInput.addEventListener("focus", function () { pairSearchFocused = true; });
+            searchInput.addEventListener("blur",  function () { pairSearchFocused = false; });
+            searchInput.addEventListener("input", function ()
+            {
+                pairSearchTerm = searchInput.value;
+                captureCurrentSelection();
+                renderPairList(getPairMode());
+            });
+            searchWrap.appendChild(searchInput);
+
+            if (pairSearchTerm)
+            {
+                let clearSearchBtn = document.createElement("button");
+                clearSearchBtn.type = "button";
+                clearSearchBtn.textContent = "\u2715";
+                clearSearchBtn.title = "Clear filter";
+                clearSearchBtn.style.cssText = "position:absolute;right:4px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:#64748b;font-size:11px;padding:2px 6px;cursor:pointer;line-height:1;";
+                clearSearchBtn.addEventListener("mouseenter", function () { clearSearchBtn.style.color = "#f87171"; });
+                clearSearchBtn.addEventListener("mouseleave", function () { clearSearchBtn.style.color = "#64748b"; });
+                clearSearchBtn.addEventListener("click", function ()
+                {
+                    pairSearchTerm = "";
+                    captureCurrentSelection();
+                    pairSearchFocused = true;
+                    renderPairList(getPairMode());
+                });
+                searchWrap.appendChild(clearSearchBtn);
+            }
+
+            searchRow.appendChild(searchWrap);
+
+            let countLabel = null;
             if (mode !== "static")
             {
-                controlsRow = document.createElement("div");
-                controlsRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;";
-
                 countLabel = document.createElement("span");
-                countLabel.style.cssText = "font-size:11px;color:#64748b;";
-                controlsRow.appendChild(countLabel);
+                countLabel.className = "pair-count-label";
+                countLabel.style.cssText = "font-size:11px;color:#64748b;white-space:nowrap;";
+                pairModeHint.insertBefore(countLabel, sortGroup);
 
                 let btnGroup = document.createElement("span");
-                btnGroup.style.cssText = "display:flex;gap:6px;";
+                btnGroup.style.cssText = "display:flex;gap:6px;flex-shrink:0;";
 
                 let selectAllBtn = document.createElement("button");
                 selectAllBtn.type = "button";
@@ -210,7 +289,7 @@
                 selectAllBtn.style.cssText = "padding:2px 10px;font-size:11px;border-radius:4px;border:1px solid #2d2b55;background:transparent;color:#94a3b8;cursor:pointer;";
                 selectAllBtn.addEventListener("click", function ()
                 {
-                    for (let cb of container.querySelectorAll("input[type='checkbox']")) { cb.checked = true; }
+                    for (let cb of visibleCheckboxes()) { cb.checked = true; }
                     updateCountLabel();
                 });
 
@@ -220,13 +299,13 @@
                 deselectAllBtn.style.cssText = selectAllBtn.style.cssText;
                 deselectAllBtn.addEventListener("click", function ()
                 {
-                    for (let cb of container.querySelectorAll("input[type='checkbox']")) { cb.checked = false; }
+                    for (let cb of visibleCheckboxes()) { cb.checked = false; }
                     updateCountLabel();
                 });
 
                 btnGroup.appendChild(selectAllBtn);
                 btnGroup.appendChild(deselectAllBtn);
-                controlsRow.appendChild(btnGroup);
+                searchRow.appendChild(btnGroup);
             }
 
             for (let pair of sorted)
@@ -334,6 +413,7 @@
                         updateCountLabel();
 
                         suffixInput.value   = p.suffix || "";
+                        for (let rb of suffixPositionRadios) { rb.checked = (rb.value === (p.suffixPosition || "suffix")); }
                         wfInput.value       = p.workflow || "";
                         pairNameInput.value = p.isDefault ? "" : p.name;
                         if (pairTagsInput) pairTagsInput.value = p.isDefault ? "" : (p.tags || "");
@@ -345,12 +425,21 @@
                     };
                 })(pair, input, row));
 
+                if (!pairMatches(pair)) row.style.display = "none";
+
                 container.appendChild(row);
             }
 
-            if (controlsRow) pairListEl.appendChild(controlsRow);
+            pairListEl.appendChild(searchRow);
             pairListEl.appendChild(container);
             updateCountLabel();
+
+            if (pairSearchFocused)
+            {
+                searchInput.focus();
+                let len = searchInput.value.length;
+                searchInput.setSelectionRange(len, len);
+            }
         });
     }
 
@@ -404,6 +493,7 @@
         let name   = pairNameInput.value.trim();
         let wf     = wfInput.value.trim();
         let suffix = suffixInput.value.trim();
+        let suffixPosition = getSuffixPosition();
 
         if (!name)              { showStatus("Enter a name for this workflow.", true); return; }
         if (name === "Default") { showStatus("'Default' is a reserved name — choose a different name.", true); return; }
@@ -418,7 +508,7 @@
             let pairs = s.pairs || [];
             let defaultEntry = pairs.find(function (p) { return p.isDefault; });
             pairs = pairs.filter(function (p) { return p.name !== name && !p.isDefault; });
-            pairs.push({ name: name, workflow: compressJson(wf), suffix: suffix, tags: tags, bannedTags: bannedTags, savedAt: Date.now() });
+            pairs.push({ name: name, workflow: compressJson(wf), suffix: suffix, suffixPosition: suffixPosition, tags: tags, bannedTags: bannedTags, savedAt: Date.now() });
             if (defaultEntry) pairs.unshift(defaultEntry);
             browser.storage.local.set({ pairs }).then(function ()
             {
@@ -700,15 +790,17 @@
         if (changes.selectedPairs) updateLogoState(urlInput.value.trim(), null);
     });
 
-    browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "samplerMode", "pairMode", "pairs", "selectedPairs", "staticPair"]).then(function (s)
+    browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "promptSuffixPosition", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "samplerMode", "pairMode", "pairs", "selectedPairs", "staticPair"]).then(function (s)
     {
         let resolvedUrl = (s.comfyUrl && s.comfyUrl.trim()) ? s.comfyUrl : "http://localhost:8188";
         let resolvedWf  = (s.workflow  && s.workflow.trim())  ? s.workflow  : DEFAULT_WORKFLOW;
         let resolvedSfx = s.promptSuffix || "";
+        let resolvedSfxPos = s.promptSuffixPosition || "suffix";
 
         urlInput.value            = resolvedUrl;
         globalBannedTagsInput.value = s.globalBannedTags || "";
         suffixInput.value         = resolvedSfx;
+        for (let rb of suffixPositionRadios) { rb.checked = (rb.value === resolvedSfxPos); }
         wfInput.value     = resolvedWf;
         updateServerBanner(s.comfyUrl);
 
@@ -729,7 +821,7 @@
         // This is the only place we update Default — never from textarea input events
         let pairs = s.pairs || [];
         pairs = pairs.filter(function (p) { return !p.isDefault; });
-        pairs.unshift({ name: "Default", workflow: resolvedWf, suffix: resolvedSfx, isDefault: true });
+        pairs.unshift({ name: "Default", workflow: resolvedWf, suffix: resolvedSfx, suffixPosition: resolvedSfxPos, isDefault: true });
 
         let validModes = ["static", "random", "sequential", "all"];
         let pairMode = validModes.includes(s.pairMode) ? s.pairMode : "static";
@@ -762,6 +854,7 @@
         let url            = urlInput.value.trim().replace(/\/$/, "");
         let globalBannedTags = globalBannedTagsInput.value.trim();
         let suffix = suffixInput.value.trim();
+        let suffixPosition = getSuffixPosition();
         let wf     = wfInput.value.trim();
         let mode   = getSelectedMode();
 
@@ -808,7 +901,7 @@
 
             // Update Default
             pairs = pairs.filter(function (p) { return !p.isDefault; });
-            pairs.unshift({ name: "Default", workflow: compressJson(wf), suffix: suffix, isDefault: true });
+            pairs.unshift({ name: "Default", workflow: compressJson(wf), suffix: suffix, suffixPosition: suffixPosition, isDefault: true });
 
             // If a named pair is loaded in the fields, update it too
             if (loadedPairName && loadedPairName !== "Default")
@@ -820,11 +913,11 @@
                     let newTags = pairTagsInput ? pairTagsInput.value.trim() : existingTags;
                     let existingBanned = pairs[idx].bannedTags || "";
                     let newBanned = pairBannedTagsInput ? pairBannedTagsInput.value.trim() : existingBanned;
-                    pairs[idx] = { name: loadedPairName, workflow: compressJson(wf), suffix: suffix, tags: newTags, bannedTags: newBanned, savedAt: Date.now() };
+                    pairs[idx] = { name: loadedPairName, workflow: compressJson(wf), suffix: suffix, suffixPosition: suffixPosition, tags: newTags, bannedTags: newBanned, savedAt: Date.now() };
                 }
             }
 
-            browser.storage.local.set({ comfyUrl: url, globalBannedTags, promptSuffix: suffix, workflow: wf, modelMode: mode, selectedModels, staticModel, seedMode, samplerMode, pairMode, selectedPairs, staticPair, pairs, sequentialStarted: false })
+            browser.storage.local.set({ comfyUrl: url, globalBannedTags, promptSuffix: suffix, promptSuffixPosition: suffixPosition, workflow: wf, modelMode: mode, selectedModels, staticModel, seedMode, samplerMode, pairMode, selectedPairs, staticPair, pairs, sequentialStarted: false })
             .then(function ()
             {
                 let msg = (loadedPairName && loadedPairName !== "Default")
@@ -987,7 +1080,7 @@
                     for (let p of valid)
                     {
                         if (p.name === "Default") continue;
-                        merged.push({ name: p.name, workflow: p.workflow, suffix: p.suffix || "", tags: p.tags || "", bannedTags: p.bannedTags || "" });
+                        merged.push({ name: p.name, workflow: p.workflow, suffix: p.suffix || "", suffixPosition: p.suffixPosition || "suffix", tags: p.tags || "", bannedTags: p.bannedTags || "" });
                     }
                     if (defaultEntry) merged.unshift(defaultEntry);
 
@@ -1054,6 +1147,7 @@
         if (!confirm("Reset URL and workflow to defaults? Your saved workflows will be kept.")) return;
         urlInput.value    = "http://localhost:8188";
         suffixInput.value = "";
+        for (let rb of suffixPositionRadios) { rb.checked = (rb.value === "suffix"); }
         wfInput.value     = DEFAULT_WORKFLOW;
         showStatus("✅ Defaults restored — click Save Settings to apply.", false);
         updateDefaultLabel(DEFAULT_WORKFLOW);

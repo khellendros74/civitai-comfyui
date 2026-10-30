@@ -88,7 +88,14 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.5.2**
+Current: **v1.5.3**
+
+### v1.5.3
+- Added a search box above the saved-workflow list (always visible, including Static mode) to filter by name or tag — with a 140+ workflow library, scrolling to find one was no longer practical. Includes a clear (✕) button.
+- Fixed checked/selected workflows being silently wiped whenever the list re-rendered (typing in the new search box, or switching A→Z/Recent sort) before clicking Save Settings — the list was rebuilding from storage's last-saved selection instead of preserving the in-progress one.
+- Fixed the "N of M selected" count duplicating itself on every keystroke in the search box (the count label was never removed before being re-inserted on each re-render).
+- The selection count no longer changes when filtering the list — it always reflects the full saved-workflow list, not just what the current search term matches.
+- Moved the Prefix/Suffix choice above the Custom text box, and swapped it to show Prefix before Suffix.
 
 ### v1.5.2
 - Fixed the right-click workflow menu: when the tag list was long enough to overflow the screen, the menu's top portion rendered off-screen and unreachable instead of scrolling — vertical position is now clamped to the viewport so the overflow scrolls correctly.
