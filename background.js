@@ -389,6 +389,18 @@ async function fetchEmbeddedPrompt(url)
     let urls = [url];
     if (url.indexOf("optimized=true") !== -1) urls.push(url.replace("optimized=true", "original=true"));
 
+    // CivitAI's jpeg delivery strips embedded generation metadata — the same
+    // asset served with a .png extension usually still has it, so add a png
+    // variant right after each jpeg candidate.
+    let withPng = [];
+    for (let u of urls)
+    {
+        withPng.push(u);
+        let pngUrl = u.replace(/\.jpe?g(\?|$)/i, ".png$1");
+        if (pngUrl !== u) withPng.push(pngUrl);
+    }
+    urls = withPng;
+
     let anyFetchSucceeded = false;
 
     for (let u of urls)
@@ -438,7 +450,7 @@ async function handleNativeSend(info, tabId)
     }
 
     let settings = await browser.storage.local.get([
-        "comfyUrl", "globalBannedTags", "promptSuffix", "workflow",
+        "comfyUrl", "globalBannedTags", "promptSuffix", "promptSuffixPosition", "workflow",
         "modelMode", "selectedModels", "staticModel", "seedMode", "samplerMode", "pairs",
         "pairMode", "selectedPairs", "staticPair", "sequentialIndex",
         "sequentialStarted", "tagSequentialIndex", "lastSentIntent"
@@ -492,7 +504,7 @@ async function handleNativeSend(info, tabId)
         pairsToSend = await resolveDefaultPairs(settings, pairs);
         if (pairsToSend.length === 0 && settings.workflow)
         {
-            pairsToSend.push({ workflow: settings.workflow, suffix: settings.promptSuffix || "" });
+            pairsToSend.push({ workflow: settings.workflow, suffix: settings.promptSuffix || "", suffixPosition: settings.promptSuffixPosition || "suffix" });
         }
     }
 
@@ -544,7 +556,8 @@ async function handleNativeSend(info, tabId)
         let mergedBanned = [settings.globalBannedTags, pair.bannedTags].filter(Boolean).join(",");
         let filteredPrompt = filterBannedTags(promptData.prompt, mergedBanned);
         let suffix = (pair.suffix || settings.promptSuffix || "").trim();
-        let finalPrompt = suffix ? filteredPrompt + ", " + suffix : filteredPrompt;
+        let suffixPosition = pair.suffixPosition || settings.promptSuffixPosition || "suffix";
+        let finalPrompt = injectCustomText(filteredPrompt, suffix, suffixPosition);
 
         let payload = buildPayload(finalPrompt, workflowTemplate, modelToInject, seedMode, sharedSeed, imageId, samplerOverrides);
 

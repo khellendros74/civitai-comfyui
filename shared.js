@@ -614,6 +614,17 @@ function filterBannedTags(prompt, bannedRaw)
     return tags.join(",");
 }
 
+// ── Custom text injection ──────────────────────────────────────────────────────
+
+// Places the user's custom text (per-pair or global "Custom text" field)
+// either before or after the (already banned-tag-filtered) prompt.
+function injectCustomText(prompt, text, position)
+{
+    let trimmed = (text || "").trim();
+    if (!trimmed) return prompt;
+    return position === "prefix" ? trimmed + ", " + prompt : prompt + ", " + trimmed;
+}
+
 // ── ComfyUI payload construction ──────────────────────────────────────────────
 
 // samplerOverrides (optional): { steps, cfg, samplerName, scheduler } pulled
