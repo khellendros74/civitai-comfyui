@@ -502,7 +502,7 @@
 
     async function sendToComfyUI(prompt, btn, imageId)
     {
-        let settings = await browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair", "sequentialIndex", "sequentialStarted", "tagSequentialIndex", "lastSentIntent"]);
+        let settings = await browser.storage.local.get(["comfyUrl", "globalBannedTags", "promptSuffix", "promptSuffixPosition", "workflow", "modelMode", "selectedModels", "staticModel", "seedMode", "pairMode", "pairs", "selectedPairs", "staticPair", "sequentialIndex", "sequentialStarted", "tagSequentialIndex", "lastSentIntent"]);
         let comfyUrl = (settings.comfyUrl || "").replace(/\/$/, "");
 
         if (!comfyUrl)
@@ -640,7 +640,7 @@
                 showToast("⚠️ No workflow configured — open the extension settings.");
                 return;
             }
-            pairsToSend.push({ workflow: workflowRaw, suffix: activeSuffix });
+            pairsToSend.push({ workflow: workflowRaw, suffix: activeSuffix, suffixPosition: settings.promptSuffixPosition || "suffix" });
         }
 
         if (isReplay) { /* amber state already set */ }
@@ -692,7 +692,8 @@
 
             let mergedBanned = [settings.globalBannedTags, pair.bannedTags].filter(Boolean).join(",");
             let filteredPrompt = filterBannedTags(prompt, mergedBanned);
-            let finalPrompt = pairSuffix ? filteredPrompt + ", " + pairSuffix : filteredPrompt;
+            let suffixPosition = pair.suffixPosition || settings.promptSuffixPosition || "suffix";
+            let finalPrompt = injectCustomText(filteredPrompt, pairSuffix, suffixPosition);
 
             let modelToInject = null;
             if (modelMode === "static" && settings.staticModel)
@@ -1147,6 +1148,7 @@
             let mw = menu.offsetWidth, mh = menu.offsetHeight;
             if (x + mw > window.innerWidth)  x = window.innerWidth  - mw - 8;
             if (y + mh > window.innerHeight) y = window.innerHeight - mh - 8;
+            if (y < 8) y = 8;
             menu.style.maxHeight = (window.innerHeight - y - 8) + "px";
             menu.style.left = x + "px";
             menu.style.top  = y + "px";
@@ -1191,7 +1193,8 @@
 
         let mergedBanned = [settings.globalBannedTags, pair.bannedTags].filter(Boolean).join(",");
         let filteredPrompt = filterBannedTags(prompt, mergedBanned);
-        let finalPrompt  = suffix ? filteredPrompt + ", " + suffix : filteredPrompt;
+        let suffixPosition = pair.suffixPosition || "suffix";
+        let finalPrompt  = injectCustomText(filteredPrompt, suffix, suffixPosition);
         let modelToInject = null;
         let modelMode = settings.modelMode || "default";
         if (modelMode === "static" && settings.staticModel)

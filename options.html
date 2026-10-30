@@ -296,7 +296,7 @@
         <h1>
             <div style="white-space:nowrap;">
                 <a href="https://addons.mozilla.org/en-US/firefox/addon/civitai-comfyui/" target="_blank" style="color:inherit;text-decoration:none;" title="View on Mozilla Add-ons">CivitAI <span>→</span> ComfyUI</a>
-                <sup style="font-size:11px;color:#64748b;font-weight:400;letter-spacing:0;">v1.5.1</sup>
+                <sup style="font-size:11px;color:#64748b;font-weight:400;letter-spacing:0;">v1.5.2</sup>
             </div>
             <p id="serverStatusBanner" style="display:none;font-size:12px;color:#64748b;margin:4px 0 0 0;"></p>
         </h1>
@@ -413,18 +413,28 @@
             <input type="text" id="pairTags" placeholder="Tags (comma separated, e.g. anime, portrait)" style="width:100%;box-sizing:border-box;margin-bottom:6px;">
             <label id="pairModeLabel" style="display:none;">Saved workflows</label>
             <div class="pair-list" id="pairList"></div>
-            <p class="hint" id="pairModeHint">Name + save the suffix &amp; workflow below. Click a saved workflow to load it.</p>
+            <p class="hint" id="pairModeHint">Name + save the custom text &amp; workflow below. Click a saved workflow to load it.</p>
         </div>
 
         <div class="field">
-            <label for="promptSuffix">Custom suffix</label>
+            <label for="promptSuffix">Custom text</label>
             <textarea id="promptSuffix" class="short" placeholder="e.g. masterpiece, best quality, HDR&#10;Leave empty to send the CivitAI prompt as-is."></textarea>
+            <div class="radio-group" style="margin-top:10px;">
+                <label class="radio-label">
+                    <input type="radio" name="suffixPosition" value="suffix" checked>
+                    <span><strong>Suffix</strong> — append the custom text after the prompt</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="suffixPosition" value="prefix">
+                    <span><strong>Prefix</strong> — insert the custom text before the prompt</span>
+                </label>
+            </div>
         </div>
 
         <div class="field">
             <label for="pairBannedTags">Banned tags</label>
             <input type="text" id="pairBannedTags" placeholder="e.g. hair, nsfw, explicit*" spellcheck="false">
-            <p class="hint">Comma-separated. Exact match (e.g. <code>hair</code>) removes only that tag. Wildcard (e.g. <code>hair*</code>) removes all tags containing that word. Only applied to the CivitAI prompt — not to Custom suffix.</p>
+            <p class="hint">Comma-separated. Exact match (e.g. <code>hair</code>) removes only that tag. Wildcard (e.g. <code>hair*</code>) removes all tags containing that word. Only applied to the CivitAI prompt — not to Custom text.</p>
         </div>
 
         <div class="field">
