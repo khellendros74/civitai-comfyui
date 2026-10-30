@@ -88,7 +88,10 @@ No data is ever sent anywhere except your own ComfyUI instance. No analytics, no
 
 ## Version
 
-Current: **v1.5.4**
+Current: **v1.5.5**
+
+### v1.5.5
+- Fixed "Send to ComfyUI" not working at all outside this dev setup (official AMO install, other machines): `shared.js`'s `injectCustomText()` and `background.js`'s use of it had only ever been saved locally, never committed to git since the Prefix/Suffix feature was added — every real build (AMO, `git pull` elsewhere) was missing the function entirely while local temp-extension testing masked it by reading the correct files straight off disk.
 
 ### v1.5.4
 - No functional changes — version-only bump used to confirm the loaded extension instance actually reflects the latest files on disk.
